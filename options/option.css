@@ -20,6 +20,11 @@ h2 {
   background: white;
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: box-shadow 0.3s; /* 新增过渡效果 */
+}
+
+.setting-item:hover {
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15); /* hover时增强阴影 */
 }
 
 label {
@@ -35,6 +40,37 @@ label {
   line-height: 1.4;
 }
 
+/* 提示信息样式 */
+#messageContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.message {
+  padding: 10px 15px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  margin-bottom: 8px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.success {
+  background: #27ae60;
+  color: white;
+}
+
+.error {
+  background: #e74c3c;
+  color: white;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 button {
   padding: 10px 20px;
   margin: 10px 5px 0 0;
@@ -44,15 +80,20 @@ button {
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s;
+  transition: all 0.3s; /* 扩展过渡效果 */
 }
 
 button:hover {
   background: #2980b9;
+  transform: translateY(-1px);
 }
 
 button:active {
   transform: translateY(1px);
+}
+
+button:focus {
+  outline: 2px solid rgba(52, 152, 219, 0.5); /* 焦点状态 */
 }
 
 #resetBtn {
@@ -69,6 +110,7 @@ select {
   border-radius: 4px;
   width: 200px;
   font-size: 14px;
+  transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 textarea {
@@ -79,6 +121,12 @@ textarea {
   font-size: 14px;
   box-sizing: border-box;
   resize: vertical;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+textarea::placeholder {
+  color: #b2babb; /* 占位符颜色优化 */
+  font-style: italic;
 }
 
 textarea:focus, select:focus {
