@@ -2,44 +2,128 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="options.css">
+  <link rel="stylesheet" href="option.css">
 </head>
 <body>
-  <h2>🔒 安全助手设置</h2>
-  
-  <div class="setting-item">
-    <label>
-      <input type="checkbox" id="autoScan">
-      启用自动扫描
-    </label>
-    <div class="description">自动扫描每个页面的安全风险</div>
-  </div>
+  <div class="container">
+    <h2>🔒 安全助手设置</h2>
+    
+    <!-- 全局设置 -->
+    <div class="settings-section">
+      <h3>全局设置</h3>
+      
+      <div class="setting-item">
+        <label>
+          <input type="checkbox" id="autoScan">
+          启用自动扫描
+        </label>
+        <div class="description">自动扫描每个页面的安全风险</div>
+      </div>
 
-  <div class="setting-item">
-    <label>
-      <input type="checkbox" id="notifications">
-      显示桌面通知
-    </label>
-    <div class="description">发现安全问题时显示桌面通知</div>
-  </div>
+      <div class="setting-item">
+        <label>
+          <input type="checkbox" id="notifications">
+          显示桌面通知
+        </label>
+        <div class="description">发现安全问题时显示桌面通知</div>
+      </div>
+    </div>
 
-  <div class="setting-item">
-    <label>扫描敏感度：</label>
-    <select id="sensitivity">
-      <option value="low">低</option>
-      <option value="medium" selected>中</option>
-      <option value="high">高</option>
-    </select>
-  </div>
+    <!-- XSS检测设置 -->
+    <div class="settings-section">
+      <h3>🚨 XSS检测设置</h3>
+      
+      <div class="setting-item">
+        <label>
+          <input type="checkbox" id="xssEnabled">
+          启用XSS检测
+        </label>
+        <div class="description">启用自动XSS漏洞检测功能</div>
+      </div>
 
-  <div class="setting-item">
-    <label>忽略的网站：</label>
-    <textarea id="ignoredSites" rows="4" placeholder="每行输入一个要忽略的网站域名，例如：example.com&#10;localhost&#10;127.0.0.1"></textarea>
-    <div class="description">这些网站将不会进行安全扫描</div>
-  </div>
+      <div class="setting-item">
+        <label>检测深度：</label>
+        <select id="xssDepth">
+          <option value="1">深度1 - 快速检测（5种载荷）</option>
+          <option value="2">深度2 - 标准检测（10种载荷）</option>
+          <option value="3">深度3 - 深度检测（40+种载荷）</option>
+        </select>
+        <div class="description">
+          深度1：最快，适合日常浏览<br>
+          深度2：平衡速度与覆盖率<br>
+          深度3：最全面，可能影响性能
+        </div>
+      </div>
 
-  <button id="saveBtn">保存设置</button>
-  <button id="resetBtn">恢复默认</button>
+      <div class="setting-item">
+        <label>
+          <input type="checkbox" id="autoSendRequest">
+          自动发送测试请求
+        </label>
+        <div class="description">
+          ⚠️ 警告：自动发送测试请求可能触发服务器防护机制。
+          建议仅在测试环境中启用。
+        </div>
+      </div>
+
+      <div class="setting-item">
+        <button id="openTestPageBtn" class="btn-test">🧪 打开XSS测试页面</button>
+        <div class="description">
+          打开内置的XSS测试环境，包含反射型、DOM型、存储型等多种测试场景
+        </div>
+      </div>
+    </div>
+
+    <!-- 高级设置 -->
+    <div class="settings-section">
+      <h3>高级设置</h3>
+      
+      <div class="setting-item">
+        <label>扫描敏感度：</label>
+        <select id="sensitivity">
+          <option value="low">低</option>
+          <option value="medium" selected>中</option>
+          <option value="high">高</option>
+        </select>
+        <div class="description">控制检测的严格程度</div>
+      </div>
+
+      <div class="setting-item">
+        <label>请求缓存时长（分钟）：</label>
+        <input type="number" id="cacheTimeout" min="1" max="60" value="5">
+        <div class="description">多久清理一次请求缓存</div>
+      </div>
+
+      <div class="setting-item">
+        <label>忽略的网站：</label>
+        <textarea id="ignoredSites" rows="4" placeholder="每行输入一个要忽略的网站域名，例如：&#10;example.com&#10;localhost&#10;127.0.0.1"></textarea>
+        <div class="description">这些网站将不会进行安全扫描</div>
+      </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="settings-section">
+      <h3>📊 统计信息</h3>
+      <div id="statsContainer" class="stats-container">
+        <div class="stat-item">
+          <span class="stat-label">拦截请求数:</span>
+          <span id="statsRequests" class="stat-value">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">发现漏洞数:</span>
+          <span id="statsVulns" class="stat-value">0</span>
+        </div>
+      </div>
+      <button id="resetStatsBtn" class="secondary-btn">重置统计</button>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="actions">
+      <button id="saveBtn" class="primary-btn">保存设置</button>
+      <button id="resetBtn" class="secondary-btn">恢复默认</button>
+      <button id="exportBtn" class="secondary-btn">导出配置</button>
+    </div>
+  </div>
 
   <script src="options.js"></script>
 </body>

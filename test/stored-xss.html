@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>存储型XSS测试</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 存储型XSS测试</h1>
+      <p>测试恶意脚本持久化存储</p>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="reflective-xss.html">反射型</a>
+      <a href="dom-xss.html">DOM型</a>
+      <a href="stored-xss.html" class="active">存储型</a>
+      <a href="bypass-test.html">绕过测试</a>
+      <a href="real-world.html">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <div class="alert alert-info">
+        <strong>测试说明：</strong>
+        存储型XSS是指恶意脚本被存储在服务器端（数据库、文件等），
+        当其他用户访问受影响页面时，脚本会被执行。
+      </div>
+
+      <!-- 测试场景1：评论系统 -->
+      <div class="test-section">
+        <h2>场景1：评论系统</h2>
+        <div class="test-case">
+          <h4>测试评论内容存储并显示</h4>
+          
+          <div class="input-group">
+            <label>发表评论：</label>
+            <textarea id="commentInput" 
+                      placeholder="输入评论内容"></textarea>
+          </div>
+
+          <button class="btn" onclick="postComment()">发表评论</button>
+          <button class="btn btn-secondary" onclick="autoFillComment()">自动填充</button>
+          <button class="btn btn-danger" onclick="clearComments()">清空评论</button>
+
+          <div id="commentsResult" class="result-area" style="display: block;">
+            <h4>评论列表：</h4>
+            <div id="commentsContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景2：用户签名 -->
+      <div class="test-section">
+        <h2>场景2：用户签名</h2>
+        <div class="test-case">
+          <h4>测试用户签名存储并显示</h4>
+          
+          <div class="input-group">
+            <label>个人签名：</label>
+            <input type="text" id="signatureInput" 
+                   placeholder="输入个人签名">
+          </div>
+
+          <button class="btn" onclick="saveSignature()">保存签名</button>
+          <button class="btn btn-secondary" onclick="autoFillSignature()">自动填充</button>
+
+          <div id="signatureResult" class="result-area">
+            <h4>我的签名：</h4>
+            <div id="signatureContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景3：留言板 -->
+      <div class="test-section">
+        <h2>场景3：留言板</h2>
+        <div class="test-case">
+          <h4>测试留言板存储并显示</h4>
+          
+          <div class="input-group">
+            <label>留言内容：</label>
+            <textarea id="messageBoardInput" 
+                      placeholder="输入留言内容"></textarea>
+          </div>
+
+          <button class="btn" onclick="postMessage()">发布留言</button>
+          <button class="btn btn-secondary" onclick="autoFillMessage()">自动填充</button>
+          <button class="btn btn-danger" onclick="clearMessages()">清空留言</button>
+
+          <div id="messageBoardResult" class="result-area" style="display: block;">
+            <h4>留言板：</h4>
+            <div id="messageBoardContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script>
+    // 使用localStorage模拟存储
+    const STORAGE_KEYS = {
+      comments: 'stored_xss_comments',
+      signature: 'stored_xss_signature',
+      messages: 'stored_xss_messages'
+    };
+
+    // 加载已存储的数据
+    window.onload = () => {
+      loadComments();
+      loadSignature();
+      loadMessages();
+    };
+
+    // 评论系统
+    function postComment() {
+      const input = document.getElementById('commentInput').value;
+      if (input) {
+        let comments = JSON.parse(localStorage.getItem(STORAGE_KEYS.comments) || '[]');
+        comments.push({
+          content: input,
+          time: new Date().toLocaleString()
+        });
+        localStorage.setItem(STORAGE_KEYS.comments, JSON.stringify(comments));
+        document.getElementById('commentInput').value = '';
+        loadComments();
+        
+        window.testUtils.reportTestResult('stored-comment', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function loadComments() {
+      const comments = JSON.parse(localStorage.getItem(STORAGE_KEYS.comments) || '[]');
+      const contentEl = document.getElementById('commentsContent');
+      
+      if (comments.length === 0) {
+        contentEl.innerHTML = '<p style="color: #999;">暂无评论</p>';
+        return;
+      }
+
+      contentEl.innerHTML = comments.map((comment, index) => `
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 6px;">
+          ${comment.content}
+          <small style="color: #999; display: block; margin-top: 10px;">${comment.time}</small>
+        </div>
+      `).join('');
+    }
+
+    function clearComments() {
+      if (confirm('确定要清空所有评论吗？')) {
+        localStorage.removeItem(STORAGE_KEYS.comments);
+        loadComments();
+      }
+    }
+
+    // 用户签名
+    function saveSignature() {
+      const input = document.getElementById('signatureInput').value;
+      if (input) {
+        localStorage.setItem(STORAGE_KEYS.signature, input);
+        loadSignature();
+        
+        window.testUtils.reportTestResult('stored-signature', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function loadSignature() {
+      const signature = localStorage.getItem(STORAGE_KEYS.signature);
+      const resultEl = document.getElementById('signatureResult');
+      const contentEl = document.getElementById('signatureContent');
+      
+      if (signature) {
+        contentEl.innerHTML = signature;
+        resultEl.style.display = 'block';
+      } else {
+        resultEl.style.display = 'none';
+      }
+    }
+
+    // 留言板
+    function postMessage() {
+      const input = document.getElementById('messageBoardInput').value;
+      if (input) {
+        let messages = JSON.parse(localStorage.getItem(STORAGE_KEYS.messages) || '[]');
+        messages.push({
+          content: input,
+          time: new Date().toLocaleString()
+        });
+        localStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(messages));
+        document.getElementById('messageBoardInput').value = '';
+        loadMessages();
+        
+        window.testUtils.reportTestResult('stored-message', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function loadMessages() {
+      const messages = JSON.parse(localStorage.getItem(STORAGE_KEYS.messages) || '[]');
+      const contentEl = document.getElementById('messageBoardContent');
+      
+      if (messages.length === 0) {
+        contentEl.innerHTML = '<p style="color: #999;">暂无留言</p>';
+        return;
+      }
+
+      contentEl.innerHTML = messages.map(msg => `
+        <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 6px;">
+          ${msg.content}
+          <small style="color: #999; display: block; margin-top: 10px;">${msg.time}</small>
+        </div>
+      `).join('');
+    }
+
+    function clearMessages() {
+      if (confirm('确定要清空所有留言吗？')) {
+        localStorage.removeItem(STORAGE_KEYS.messages);
+        loadMessages();
+      }
+    }
+
+    // 自动填充
+    const payloads = window.testUtils.autoFillPayload('stored');
+
+    function autoFillComment() {
+      document.getElementById('commentInput').value = payloads[0];
+    }
+
+    function autoFillSignature() {
+      document.getElementById('signatureInput').value = payloads[1];
+    }
+
+    function autoFillMessage() {
+      document.getElementById('messageBoardInput').value = payloads[0];
+    }
+  </script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

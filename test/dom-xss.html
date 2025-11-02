@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOM型XSS测试</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 DOM型XSS测试</h1>
+      <p>测试客户端脚本不安全操作</p>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="reflective-xss.html">反射型</a>
+      <a href="dom-xss.html" class="active">DOM型</a>
+      <a href="stored-xss.html">存储型</a>
+      <a href="bypass-test.html">绕过测试</a>
+      <a href="real-world.html">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <div class="alert alert-info">
+        <strong>测试说明：</strong>
+        DOM型XSS是客户端代码在浏览器中不当地操作DOM导致的漏洞。
+        恶意脚本不会经过服务器，直接在客户端执行。
+      </div>
+
+      <!-- 测试场景1：Location.hash -->
+      <div class="test-section">
+        <h2>场景1：Location.Hash 注入</h2>
+        <div class="test-case">
+          <h4>测试URL Hash未过滤操作DOM</h4>
+          <p>修改URL的hash部分，查看页面输出</p>
+          
+          <div class="code-block">
+当前URL: <span id="currentUrl"></span>
+
+示例: <code>#&lt;img src=x onerror=alert('XSS')&gt;</code>
+          </div>
+
+          <div class="input-group">
+            <label>Hash值（会自动添加到URL）：</label>
+            <input type="text" id="hashInput" 
+                   placeholder="输入hash值">
+          </div>
+
+          <button class="btn" onclick="testHash()">测试Hash</button>
+          <button class="btn btn-secondary" onclick="autoFillHash()">自动填充</button>
+
+          <div id="hashResult" class="result-area">
+            <h4>显示结果：</h4>
+            <div id="hashResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景2：Eval函数 -->
+      <div class="test-section">
+        <h2>场景2：Eval函数执行</h2>
+        <div class="test-case">
+          <h4>测试使用eval动态执行代码</h4>
+          
+          <div class="input-group">
+            <label>输入JavaScript代码：</label>
+            <input type="text" id="evalInput" 
+                   placeholder="alert('XSS')">
+          </div>
+
+          <button class="btn" onclick="testEval()">执行代码</button>
+          <button class="btn btn-secondary" onclick="autoFillEval()">自动填充</button>
+
+          <div id="evalResult" class="result-area">
+            <h4>执行结果：</h4>
+            <pre id="evalResultContent"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景3：InnerHTML -->
+      <div class="test-section">
+        <h2>场景3：InnerHTML 操作</h2>
+        <div class="test-case">
+          <h4>测试使用innerHTML插入未过滤内容</h4>
+          
+          <div class="input-group">
+            <label>输入HTML内容：</label>
+            <textarea id="innerHtmlInput" 
+                      placeholder="<p>输入HTML内容</p>"></textarea>
+          </div>
+
+          <button class="btn" onclick="testInnerHtml()">插入HTML</button>
+          <button class="btn btn-secondary" onclick="autoFillInnerHtml()">自动填充</button>
+
+          <div id="innerHtmlResult" class="result-area">
+            <h4>显示结果：</h4>
+            <div id="innerHtmlResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景4：document.write -->
+      <div class="test-section">
+        <h2>场景4：Document.Write</h2>
+        <div class="test-case">
+          <h4>测试使用document.write输出内容</h4>
+          
+          <div class="input-group">
+            <label>输入内容：</label>
+            <input type="text" id="writeInput" 
+                   placeholder="输入要写入的内容">
+          </div>
+
+          <button class="btn" onclick="testWrite()">写入文档</button>
+          <button class="btn btn-secondary" onclick="autoFillWrite()">自动填充</button>
+
+          <div id="writeResult" class="result-area">
+            <h4>写入结果：</h4>
+            <div id="writeResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景5：setTimeout -->
+      <div class="test-section">
+        <h2>场景5：setTimeout 执行</h2>
+        <div class="test-case">
+          <h4>测试使用setTimeout执行动态代码</h4>
+          
+          <div class="input-group">
+            <label>输入代码：</label>
+            <input type="text" id="timeoutInput" 
+                   placeholder="alert('XSS')">
+          </div>
+
+          <button class="btn" onclick="testTimeout()">延迟执行</button>
+          <button class="btn btn-secondary" onclick="autoFillTimeout()">自动填充</button>
+
+          <div id="timeoutResult" class="result-area">
+            <h4>执行结果：</h4>
+            <div id="timeoutResultContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script>
+    // 显示当前URL
+    document.getElementById('currentUrl').textContent = window.location.href;
+
+    // 页面加载时处理hash
+    window.onload = () => {
+      const hash = window.location.hash.substring(1);
+      if (hash) {
+        document.getElementById('hashInput').value = hash;
+        testHash(true);
+      }
+    };
+
+    function testHash(auto = false) {
+      const hash = document.getElementById('hashInput').value;
+      const resultEl = document.getElementById('hashResult');
+      const contentEl = document.getElementById('hashResultContent');
+      
+      if (hash) {
+        // 修改URL
+        window.location.hash = hash;
+        
+        // 危险：直接将hash内容插入DOM
+        contentEl.innerHTML = decodeURIComponent(hash);
+        resultEl.classList.add('show');
+        
+        if (!auto) {
+          window.testUtils.reportTestResult('dom-hash', {
+            payload: hash,
+            vulnerable: true
+          });
+        }
+      }
+    }
+
+    function testEval() {
+      const input = document.getElementById('evalInput').value;
+      const resultEl = document.getElementById('evalResult');
+      const contentEl = document.getElementById('evalResultContent');
+      
+      if (input) {
+        // 危险：使用eval执行动态代码
+        try {
+          eval(input);
+          contentEl.textContent = '代码已执行';
+        } catch (e) {
+          contentEl.textContent = '执行错误: ' + e.message;
+        }
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('dom-eval', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function testInnerHtml() {
+      const input = document.getElementById('innerHtmlInput').value;
+      const resultEl = document.getElementById('innerHtmlResult');
+      const contentEl = document.getElementById('innerHtmlResultContent');
+      
+      if (input) {
+        // 危险：使用innerHTML插入未过滤内容
+        contentEl.innerHTML = input;
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('dom-innerhtml', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function testWrite() {
+      const input = document.getElementById('writeInput').value;
+      const resultEl = document.getElementById('writeResult');
+      const contentEl = document.getElementById('writeResultContent');
+      
+      if (input) {
+        // 危险：使用document.write输出内容
+        const tempDiv = document.createElement('div');
+        tempDiv.style.border = '1px solid #ddd';
+        tempDiv.style.padding = '10px';
+        
+        document.write(input);
+        contentEl.textContent = '内容已写入文档';
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('dom-write', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function testTimeout() {
+      const input = document.getElementById('timeoutInput').value;
+      const resultEl = document.getElementById('timeoutResult');
+      const contentEl = document.getElementById('timeoutResultContent');
+      
+      if (input) {
+        // 危险：使用setTimeout执行动态代码
+        setTimeout(() => {
+          try {
+            eval(input);
+            contentEl.textContent = '代码已延迟执行';
+          } catch (e) {
+            contentEl.textContent = '执行错误: ' + e.message;
+          }
+          resultEl.classList.add('show');
+        }, 1000);
+        
+        window.testUtils.reportTestResult('dom-timeout', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    // 自动填充函数
+    const payloads = window.testUtils.autoFillPayload('dom');
+
+    function autoFillHash() {
+      document.getElementById('hashInput').value = '<img src=x onerror=alert("XSS")>';
+    }
+
+    function autoFillEval() {
+      document.getElementById('evalInput').value = 'alert("XSS")';
+    }
+
+    function autoFillInnerHtml() {
+      document.getElementById('innerHtmlInput').value = '<img src=x onerror=alert("XSS")>';
+    }
+
+    function autoFillWrite() {
+      document.getElementById('writeInput').value = '<img src=x onerror=alert("XSS")>';
+    }
+
+    function autoFillTimeout() {
+      document.getElementById('timeoutInput').value = 'alert("XSS")';
+    }
+  </script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

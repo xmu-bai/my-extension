@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>真实场景测试</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 真实场景XSS测试</h1>
+      <p>模拟实际Web应用场景</p>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="reflective-xss.html">反射型</a>
+      <a href="dom-xss.html">DOM型</a>
+      <a href="stored-xss.html">存储型</a>
+      <a href="bypass-test.html">绕过测试</a>
+      <a href="real-world.html" class="active">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <div class="alert alert-info">
+        <strong>测试说明：</strong>
+        这些场景模拟真实Web应用中的常见XSS攻击点。
+      </div>
+
+      <!-- 场景1：商品搜索 -->
+      <div class="test-section">
+        <h2>场景1：电商商品搜索</h2>
+        <div class="test-case">
+          <h4>模拟电商网站的搜索功能</h4>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <input type="text" id="productSearch" placeholder="搜索商品..." 
+                   style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            <button class="btn" onclick="searchProduct()">搜索</button>
+          </div>
+
+          <div id="productResults">
+            <p style="color: #999;">请输入关键词搜索商品</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 场景2：用户评论 -->
+      <div class="test-section">
+        <h2>场景2：博客评论</h2>
+        <div class="test-case">
+          <h4>模拟博客评论系统</h4>
+          
+          <div class="input-group">
+            <label>发表评论：</label>
+            <textarea id="blogComment" placeholder="写下你的想法..."></textarea>
+          </div>
+
+          <button class="btn" onclick="postBlogComment()">发表评论</button>
+          
+          <div id="blogComments" style="margin-top: 20px;">
+            <div style="border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+              <strong>张三</strong> <small style="color: #999;">2024-01-01 12:00</small>
+              <p>这是一条正常的评论内容。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 场景3：用户资料 -->
+      <div class="test-section">
+        <h2>场景3：社交平台个人资料</h2>
+        <div class="test-case">
+          <h4>模拟社交平台的个人资料页面</h4>
+          
+          <div class="input-group">
+            <label>个性签名：</label>
+            <textarea id="profileBio" placeholder="介绍一下自己..."></textarea>
+          </div>
+
+          <button class="btn" onclick="updateProfile()">更新资料</button>
+          
+          <div id="profileDisplay" style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 6px; display: none;">
+            <h4>个人资料</h4>
+            <div id="profileContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 场景4：反馈表单 -->
+      <div class="test-section">
+        <h2>场景4：客服反馈</h2>
+        <div class="test-case">
+          <h4>模拟客服反馈表单</h4>
+          
+          <div class="input-group">
+            <label>反馈内容：</label>
+            <textarea id="feedbackContent" placeholder="请描述您遇到的问题..."></textarea>
+          </div>
+
+          <button class="btn" onclick="submitFeedback()">提交反馈</button>
+          
+          <div id="feedbackResult" class="result-area">
+            <h4>反馈确认：</h4>
+            <div id="feedbackDisplay"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script>
+    // 商品搜索
+    function searchProduct() {
+      const keyword = document.getElementById('productSearch').value;
+      const resultsEl = document.getElementById('productResults');
+      
+      if (!keyword) return;
+      
+      resultsEl.innerHTML = `
+        <div style="padding: 15px; background: #fff; border-left: 4px solid #667eea; margin-bottom: 10px;">
+          <p>搜索关键词：<strong>${keyword}</strong></p>
+          <p style="margin-top: 10px;">未找到相关商品</p>
+        </div>
+      `;
+      
+      window.testUtils.reportTestResult('real-world-search', {
+        payload: keyword,
+        vulnerable: true
+      });
+    }
+
+    // 博客评论
+    function postBlogComment() {
+      const comment = document.getElementById('blogComment').value;
+      const commentsEl = document.getElementById('blogComments');
+      
+      if (!comment) return;
+      
+      const newComment = `
+        <div style="border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 10px;">
+          <strong>游客</strong> <small style="color: #999;">${new Date().toLocaleString()}</small>
+          <p>${comment}</p>
+        </div>
+      `;
+      
+      commentsEl.innerHTML = newComment + commentsEl.innerHTML;
+      document.getElementById('blogComment').value = '';
+      
+      window.testUtils.reportTestResult('real-world-comment', {
+        payload: comment,
+        vulnerable: true
+      });
+    }
+
+    // 个人资料
+    function updateProfile() {
+      const bio = document.getElementById('profileBio').value;
+      const profileEl = document.getElementById('profileDisplay');
+      const contentEl = document.getElementById('profileContent');
+      
+      if (!bio) return;
+      
+      contentEl.innerHTML = `
+        <p><strong>昵称：</strong>测试用户</p>
+        <p><strong>个性签名：</strong>${bio}</p>
+        <p><strong>注册时间：</strong>2024-01-01</p>
+      `;
+      
+      profileEl.style.display = 'block';
+      
+      window.testUtils.reportTestResult('real-world-profile', {
+        payload: bio,
+        vulnerable: true
+      });
+    }
+
+    // 反馈表单
+    function submitFeedback() {
+      const feedback = document.getElementById('feedbackContent').value;
+      const resultEl = document.getElementById('feedbackResult');
+      const displayEl = document.getElementById('feedbackDisplay');
+      
+      if (!feedback) return;
+      
+      displayEl.innerHTML = `
+        <div style="background: #e7f3ff; padding: 15px; border-radius: 6px;">
+          <p>您的反馈已收到：</p>
+          <p style="margin-top: 10px;">${feedback}</p>
+        </div>
+      `;
+      
+      resultEl.classList.add('show');
+      document.getElementById('feedbackContent').value = '';
+      
+      window.testUtils.reportTestResult('real-world-feedback', {
+        payload: feedback,
+        vulnerable: true
+      });
+    }
+  </script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

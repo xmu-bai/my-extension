@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反射型XSS测试</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 反射型XSS测试</h1>
+      <p>测试参数未过滤直接输出</p>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="reflective-xss.html" class="active">反射型</a>
+      <a href="dom-xss.html">DOM型</a>
+      <a href="stored-xss.html">存储型</a>
+      <a href="bypass-test.html">绕过测试</a>
+      <a href="real-world.html">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <div class="alert alert-info">
+        <strong>测试说明：</strong>
+        反射型XSS是指恶意脚本作为请求的一部分被发送到服务器，服务器立即将其反射回响应中。
+        用户点击恶意链接后，脚本在浏览器中执行。
+      </div>
+
+      <!-- 测试场景1：URL参数 -->
+      <div class="test-section">
+        <h2>场景1：URL参数反射</h2>
+        <div class="test-case">
+          <h4>测试URL参数未过滤输出</h4>
+          <p>在URL中添加payload参数，查看页面输出：</p>
+          
+          <div class="input-group">
+            <label>当前URL参数值：</label>
+            <input type="text" id="urlParam" readonly 
+                   value="<script>alert('XSS')</script>">
+          </div>
+
+          <button class="btn" onclick="testUrlParam()">测试URL参数</button>
+          <button class="btn btn-secondary" onclick="autoFillUrl()">自动填充</button>
+
+          <div id="urlResult" class="result-area">
+            <h4>显示结果：</h4>
+            <pre id="urlResultContent"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景2：搜索框 -->
+      <div class="test-section">
+        <h2>场景2：搜索框反射</h2>
+        <div class="test-case">
+          <h4>测试搜索输入未过滤</h4>
+          
+          <div class="input-group">
+            <label>搜索内容：</label>
+            <input type="text" id="searchInput" 
+                   placeholder="输入搜索关键词">
+          </div>
+
+          <button class="btn" onclick="testSearch()">搜索</button>
+          <button class="btn btn-secondary" onclick="autoFillSearch()">自动填充</button>
+
+          <div id="searchResult" class="result-area">
+            <h4>搜索结果：</h4>
+            <div id="searchResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景3：消息显示 -->
+      <div class="test-section">
+        <h2>场景3：消息显示</h2>
+        <div class="test-case">
+          <h4>测试消息内容未过滤</h4>
+          
+          <div class="input-group">
+            <label>消息内容：</label>
+            <textarea id="messageInput" 
+                      placeholder="输入消息内容"></textarea>
+          </div>
+
+          <button class="btn" onclick="testMessage()">显示消息</button>
+          <button class="btn btn-secondary" onclick="autoFillMessage()">自动填充</button>
+
+          <div id="messageResult" class="result-area">
+            <h4>消息显示：</h4>
+            <div id="messageResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 测试场景4：个人信息 -->
+      <div class="test-section">
+        <h2>场景4：个人信息显示</h2>
+        <div class="test-case">
+          <h4>测试个人信息未过滤</h4>
+          
+          <div class="input-group">
+            <label>用户名：</label>
+            <input type="text" id="usernameInput" 
+                   placeholder="输入用户名">
+          </div>
+
+          <button class="btn" onclick="testUsername()">显示信息</button>
+          <button class="btn btn-secondary" onclick="autoFillUsername()">自动填充</button>
+
+          <div id="usernameResult" class="result-area">
+            <h4>用户信息：</h4>
+            <div id="usernameResultContent"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 提示信息 -->
+      <div class="alert alert-success" style="margin-top: 30px;">
+        <strong>提示：</strong>
+        提交测试后，检查浏览器控制台和扩展插件是否检测到XSS漏洞。
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script>
+    // 获取URL参数
+    function getUrlParam() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('test') || '';
+    }
+
+    // 页面加载时检测URL参数
+    window.onload = () => {
+      const param = getUrlParam();
+      if (param) {
+        document.getElementById('urlParam').value = decodeURIComponent(param);
+        testUrlParam(true);
+      }
+    };
+
+    function testUrlParam(auto = false) {
+      const param = document.getElementById('urlParam').value;
+      const resultEl = document.getElementById('urlResult');
+      const contentEl = document.getElementById('urlResultContent');
+      
+      if (param) {
+        // 危险：直接输出未过滤
+        contentEl.innerHTML = `你输入的参数是：${param}`;
+        resultEl.classList.add('show');
+        
+        if (!auto) {
+          window.testUtils.reportTestResult('reflective-url', {
+            payload: param,
+            vulnerable: true
+          });
+        }
+      }
+    }
+
+    function testSearch() {
+      const input = document.getElementById('searchInput').value;
+      const resultEl = document.getElementById('searchResult');
+      const contentEl = document.getElementById('searchResultContent');
+      
+      if (input) {
+        // 危险：直接输出未过滤
+        contentEl.innerHTML = `搜索结果：<strong>${input}</strong>（共找到 0 条结果）`;
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('reflective-search', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function testMessage() {
+      const input = document.getElementById('messageInput').value;
+      const resultEl = document.getElementById('messageResult');
+      const contentEl = document.getElementById('messageResultContent');
+      
+      if (input) {
+        // 危险：直接输出未过滤
+        contentEl.innerHTML = `<div style="background: #e9ecef; padding: 15px; border-radius: 6px;">
+          <p>${input}</p>
+        </div>`;
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('reflective-message', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    function testUsername() {
+      const input = document.getElementById('usernameInput').value;
+      const resultEl = document.getElementById('usernameResult');
+      const contentEl = document.getElementById('usernameResultContent');
+      
+      if (input) {
+        // 危险：直接输出未过滤
+        contentEl.innerHTML = `
+          <div style="border: 1px solid #ddd; padding: 20px; border-radius: 6px;">
+            <p><strong>用户名：</strong>${input}</p>
+            <p><strong>邮箱：</strong>user@example.com</p>
+            <p><strong>注册时间：</strong>2024-01-01</p>
+          </div>
+        `;
+        resultEl.classList.add('show');
+        
+        window.testUtils.reportTestResult('reflective-username', {
+          payload: input,
+          vulnerable: true
+        });
+      }
+    }
+
+    // 自动填充函数
+    const payloads = window.testUtils.autoFillPayload('reflective');
+
+    function autoFillUrl() {
+      document.getElementById('urlParam').value = payloads[0];
+    }
+
+    function autoFillSearch() {
+      document.getElementById('searchInput').value = payloads[1];
+    }
+
+    function autoFillMessage() {
+      document.getElementById('messageInput').value = payloads[2];
+    }
+
+    function autoFillUsername() {
+      document.getElementById('usernameInput').value = payloads[1];
+    }
+  </script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

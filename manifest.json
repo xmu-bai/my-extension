@@ -12,14 +12,15 @@
   },
   
   "action": {
-    "default_popup": "popup/popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_title": "安全助手"
   },
   
-  "options_page": "options/options.html",
+  "options_page": "src/options/options.html",
   
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background.js",
+    "type": "module"
   },
   
   "content_scripts": [
@@ -34,10 +35,18 @@
     "activeTab", 
     "storage", 
     "notifications",
-    "tabs"
+    "tabs",
+    "webRequest"
   ],
   
   "host_permissions": [
     "<all_urls>"
+  ],
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["test/*", "test/**/*"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }

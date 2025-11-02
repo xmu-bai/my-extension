@@ -1,23 +1,91 @@
 body {
-  width: 300px;
+  width: 320px;
+  max-height: 600px;
   padding: 15px;
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
+  font-size: 14px;
 }
 
 h3 {
   margin-top: 0;
   color: #2c3e50;
   text-align: center;
+  font-size: 18px;
 }
 
+h4 {
+  margin: 10px 0 8px 0;
+  color: #e74c3c;
+  font-size: 14px;
+}
+
+/* XSS检测状态 */
+.xss-status {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge.enabled {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.disabled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.stats {
+  display: flex;
+  gap: 15px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #6c757d;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #3498db;
+}
+
+/* 状态显示 */
 .status {
   padding: 10px;
   margin: 10px 0;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
   text-align: center;
   border: 1px solid transparent;
+  line-height: 1.5;
 }
 
 .safe {
@@ -38,6 +106,66 @@ h3 {
   border-color: #f5c6cb;
 }
 
+/* 漏洞列表 */
+.vulnerabilities-section {
+  margin: 12px 0;
+  padding: 10px;
+  background: #fff5f5;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
+}
+
+.vulnerabilities-list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.vulnerability-item {
+  background: white;
+  border: 1px solid #fee2e2;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.vuln-title {
+  color: #dc2626;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.vuln-url {
+  color: #1e40af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.vuln-param {
+  color: #7c2d12;
+  font-size: 11px;
+}
+
+.vuln-more {
+  text-align: center;
+  color: #6c757d;
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* 按钮区域 */
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0;
+}
+
 button {
   width: 100%;
   padding: 10px;
@@ -47,7 +175,7 @@ button {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   transition: background-color 0.3s;
 }
 
@@ -59,6 +187,27 @@ button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+.clear-btn {
+  background: #e74c3c;
+  font-size: 12px;
+  padding: 6px;
+  margin: 0;
+}
+
+.clear-btn:hover {
+  background: #c0392b;
+}
+
+#optionsBtn {
+  margin-top: 10px;
+}
+
+/* 设置区域 */
 .settings {
   margin-top: 15px;
   padding-top: 10px;
@@ -69,9 +218,11 @@ label {
   display: flex;
   align-items: center;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 
 input[type="checkbox"] {
   margin-right: 8px;
+  cursor: pointer;
 }

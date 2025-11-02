@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XSS测试页面</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🧪 XSS漏洞测试页面</h1>
+      <p>安全测试环境 - 仅用于授权测试</p>
+    </div>
+
+    <div class="warning-banner">
+      ⚠️ 这是XSS测试环境！请勿在生产环境使用！
+    </div>
+
+    <nav class="nav">
+      <a href="index.html" class="active">首页</a>
+      <a href="reflective-xss.html">反射型</a>
+      <a href="dom-xss.html">DOM型</a>
+      <a href="stored-xss.html">存储型</a>
+      <a href="bypass-test.html">绕过测试</a>
+      <a href="real-world.html">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <h2>📋 测试说明</h2>
+      <p>这个测试环境提供了多种XSS攻击场景，用于测试安全检测扩展的功能。</p>
+
+      <div class="alert alert-warning">
+        <strong>重要提示：</strong>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li>本测试环境仅用于合法的安全研究和测试目的</li>
+          <li>请确保在授权范围内进行测试</li>
+          <li>所有payload都是无害的alert弹窗</li>
+          <li>测试后建议清理浏览器缓存</li>
+        </ul>
+      </div>
+
+      <div class="alert alert-success">
+        <strong>✅ 自动检测已启用：</strong>
+        插件会自动检测测试页面中的XSS漏洞，发现漏洞时会发送桌面通知。
+        请在浏览器控制台查看检测日志。
+      </div>
+
+      <h2>🎯 测试类别</h2>
+      <div class="test-grid">
+        <div class="test-card" onclick="window.location.href='reflective-xss.html'">
+          <h3>反射型XSS</h3>
+          <p>测试URL参数和表单输入未经过滤直接输出到页面</p>
+        </div>
+
+        <div class="test-card" onclick="window.location.href='dom-xss.html'">
+          <h3>DOM型XSS</h3>
+          <p>测试客户端JavaScript不安全地操作DOM元素</p>
+        </div>
+
+        <div class="test-card" onclick="window.location.href='stored-xss.html'">
+          <h3>存储型XSS</h3>
+          <p>测试恶意脚本存储在服务器后被其他用户加载</p>
+        </div>
+
+        <div class="test-card" onclick="window.location.href='bypass-test.html'">
+          <h3>绕过测试</h3>
+          <p>测试各种过滤绕过技术（编码、大小写等）</p>
+        </div>
+
+        <div class="test-card" onclick="window.location.href='real-world.html'">
+          <h3>真实场景</h3>
+          <p>模拟实际Web应用中的常见XSS场景</p>
+        </div>
+      </div>
+
+      <h2>📊 如何使用</h2>
+      <div class="test-section">
+        <div class="test-case">
+          <h4>步骤 1：选择测试类别</h4>
+          <p>点击上方任意测试卡片，进入对应的测试页面</p>
+        </div>
+
+        <div class="test-case">
+          <h4>步骤 2：运行测试</h4>
+          <p>可以选择"自动填充"按钮自动填入payload，或手动输入自定义payload</p>
+        </div>
+
+        <div class="test-case">
+          <h4>步骤 3：查看结果</h4>
+          <p>提交后查看页面输出结果，扩展插件会自动检测并发送通知</p>
+        </div>
+
+        <div class="test-case">
+          <h4>步骤 4：查看报告</h4>
+          <p>打开扩展插件查看检测到的漏洞详情</p>
+        </div>
+      </div>
+
+      <h2>🔍 测试载荷示例</h2>
+      <div class="code-block">
+&lt;script&gt;alert("XSS")&lt;/script&gt;
+&lt;img src=x onerror=alert("XSS")&gt;
+&lt;svg onload=alert("XSS")&gt;
+javascript:alert("XSS")
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

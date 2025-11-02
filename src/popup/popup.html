@@ -7,16 +7,48 @@
 <body>
   <h3>🔒 安全助手</h3>
   
+  <!-- XSS检测状态 -->
+  <div class="xss-status">
+    <div class="status-header">
+      <span>🔍 XSS检测</span>
+      <span id="xssEnabledStatus" class="status-badge enabled">已启用</span>
+    </div>
+    <div id="xssStats" class="stats">
+      <div class="stat-item">
+        <span class="stat-label">检测深度:</span>
+        <span id="depthValue" class="stat-value">1</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">拦截请求:</span>
+        <span id="requestCount" class="stat-value">0</span>
+      </div>
+    </div>
+  </div>
+
   <div id="status" class="status">
     正在检测页面安全状态...
   </div>
+
+  <!-- 漏洞列表 -->
+  <div id="vulnerabilitiesSection" class="vulnerabilities-section" style="display: none;">
+    <h4>🚨 发现的漏洞</h4>
+    <div id="vulnerabilitiesList" class="vulnerabilities-list"></div>
+    <button id="clearBtn" class="clear-btn">清除记录</button>
+  </div>
   
-  <button id="scanBtn">立即扫描页面</button>
+  <div class="actions">
+    <button id="scanBtn">立即扫描页面</button>
+    <button id="quickScanBtn">快速扫描</button>
+  </div>
+
   <button id="optionsBtn">插件设置</button>
   
   <div class="settings">
     <label>
       <input type="checkbox" id="autoScan"> 自动扫描
+    </label>
+    <label>
+      <input type="checkbox" id="xssEnabled"> 启用XSS检测
     </label>
   </div>
 
