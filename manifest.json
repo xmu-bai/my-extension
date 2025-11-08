@@ -1,43 +1,54 @@
 {
   "manifest_version": 3,
-  "name": "安全处理助手",
-  "version": "1.0",
-  "description": "安全问题处理插件",
-  
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
-  
-  "action": {
-    "default_popup": "popup/popup.html",
-    "default_title": "安全助手"
-  },
-  
-  "options_page": "options/options.html",
-  
+  "name": "安全浏览器插件",
+  "version": "1.0.0",
+  "description": "集恶意URL检测、XSS防护、隐私追踪阻止于一体的Chrome浏览器安全插件",
+  "permissions": [
+    "storage",
+    "webRequest",
+    "tabs",
+    "activeTab",
+    "declarativeNetRequest",
+    "scripting",
+    "cookies"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
-  
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "js": [
+        "content-scripts/url-checker.js",
+        "content-scripts/xss-detector.js",
+        "content-scripts/tracker-blocker.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
-  
-  "permissions": [
-    "activeTab", 
-    "storage", 
-    "notifications",
-    "tabs"
-  ],
-  
-  "host_permissions": [
-    "<all_urls>"
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["warning-pages/*"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
+
