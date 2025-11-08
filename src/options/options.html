@@ -2,10 +2,13 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="options.css">
+  <link rel="stylesheet" href="option.css">
 </head>
 <body>
   <h2>🔒 安全助手设置</h2>
+  
+  <!-- 新增提示容器（用于显示各类提示信息） -->
+  <div id="messageContainer"></div>
   
   <div class="setting-item">
     <label>
@@ -23,19 +26,28 @@
     <div class="description">发现安全问题时显示桌面通知</div>
   </div>
 
-  <div class="setting-item">
-    <label>扫描敏感度：</label>
-    <select id="sensitivity">
-      <option value="low">低</option>
-      <option value="medium" selected>中</option>
-      <option value="high">高</option>
-    </select>
-  </div>
+  <!-- 仅修改select选项值为大写 -->
+<div class="setting-item">
+  <label>扫描敏感度：</label>
+  <select id="sensitivity">
+    <option value="LOW">低</option>
+    <option value="MEDIUM" selected>中</option>
+    <option value="HIGH">高</option>
+  </select>
+</div>
 
   <div class="setting-item">
     <label>忽略的网站：</label>
-    <textarea id="ignoredSites" rows="4" placeholder="每行输入一个要忽略的网站域名，例如：example.com&#10;localhost&#10;127.0.0.1"></textarea>
-    <div class="description">这些网站将不会进行安全扫描</div>
+    <div id="ignoredContainer">
+      <ul id="ignoredList"></ul>
+      <div id="ignoredControls">
+        <input type="text" id="ignoredInput" placeholder="输入域名 / host 或 paste 完整 URL，然后点击添加" />
+        <button id="addIgnoredBtn">添加</button>
+        <button id="importBtn">导入</button>
+        <button id="exportBtn">导出</button>
+      </div>
+    </div>
+    <div class="description">这些网站将不会进行安全扫描（以#开头的行视为注释，导入时会忽略）</div>
   </div>
 
   <button id="saveBtn">保存设置</button>
