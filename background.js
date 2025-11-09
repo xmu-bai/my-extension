@@ -55,7 +55,6 @@ const TRACKER_DOMAINS = [
 
 // 初始化插件
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('安全浏览器插件已安装');
   // 初始化默认配置
   chrome.storage.local.get(['config'], (result) => {
     if (!result.config) {
