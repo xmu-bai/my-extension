@@ -33,6 +33,8 @@
 
   // 监听URL变化（SPA应用）
   let lastURL = window.location.href;
+  
+  // 使用MutationObserver监听DOM变化
   const observer = new MutationObserver(() => {
     if (window.location.href !== lastURL) {
       lastURL = window.location.href;
@@ -40,7 +42,42 @@
     }
   });
 
-  observer.observe(document, { subtree: true, childList: true });
+  // 监听pushState和replaceState（SPA路由变化）
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  
+  history.pushState = function(...args) {
+    originalPushState.apply(history, args);
+    if (window.location.href !== lastURL) {
+      lastURL = window.location.href;
+      checkCurrentURL();
+    }
+  };
+  
+  history.replaceState = function(...args) {
+    originalReplaceState.apply(history, args);
+    if (window.location.href !== lastURL) {
+      lastURL = window.location.href;
+      checkCurrentURL();
+    }
+  };
+  
+  // 监听popstate事件（浏览器前进后退）
+  window.addEventListener('popstate', () => {
+    if (window.location.href !== lastURL) {
+      lastURL = window.location.href;
+      checkCurrentURL();
+    }
+  });
+
+  // 开始观察DOM变化
+  if (document.body) {
+    observer.observe(document.body, { subtree: true, childList: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      observer.observe(document.body, { subtree: true, childList: true });
+    });
+  }
 
 })();
 

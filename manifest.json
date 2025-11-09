@@ -46,9 +46,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["warning-pages/*"],
+      "resources": ["warning-pages/*.html", "warning-pages/*.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
 }
 
