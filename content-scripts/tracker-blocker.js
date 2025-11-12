@@ -174,6 +174,9 @@
       if (!blockedDomains.has(domain)) {
         blockedDomains.add(domain);
         blockedTrackers++;
+        if (window.learningModeReporter && typeof window.learningModeReporter.record === 'function') {
+          window.learningModeReporter.record(domain);
+        }
         
         // 向background报告
         chrome.runtime.sendMessage({

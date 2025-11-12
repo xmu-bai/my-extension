@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadWhitelist();
   loadHistory();
   loadStats();
+  loadLearningStats();
   setupEventListeners();
 });
 
@@ -34,6 +35,8 @@ function loadConfig() {
     document.getElementById('thirdPartyCookies').checked = config.trackerBlocking.thirdPartyCookies;
     document.getElementById('canvasProtection').checked = config.trackerBlocking.canvasProtection;
     document.getElementById('webrtcProtection').checked = config.trackerBlocking.webrtcProtection;
+    
+    document.getElementById('learningModeEnabled').checked = config.learningMode?.enabled || false;
     
     // 隐私设置
     document.getElementById('anonymousReport').checked = config.privacy?.anonymousReport !== false;
@@ -120,6 +123,48 @@ function loadStats() {
   });
 }
 
+// 加载学习模式统计
+function loadLearningStats() {
+  chrome.runtime.sendMessage({ action: 'get_learning_stats' }, (response) => {
+    const container = document.getElementById('learningStatsList');
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = '';
+
+    const stats = response?.stats || {};
+    const entries = Object.entries(stats);
+
+    if (entries.length === 0) {
+      container.innerHTML = '<p style="color: #999; padding: 12px;">学习模式未启用或暂无数据</p>';
+      return;
+    }
+
+    entries.sort((a, b) => {
+      const aCount = (a[1] && a[1].count) || 0;
+      const bCount = (b[1] && b[1].count) || 0;
+      return bCount - aCount;
+    });
+
+    const topEntries = entries.slice(0, 10);
+    topEntries.forEach(([domain, details]) => {
+      const item = document.createElement('div');
+      item.className = 'learning-stat-item';
+      const count = (details && details.count) || (details && details.firstParties ? details.firstParties.length : 0) || 0;
+      const firstParties = details?.firstParties || [];
+
+      item.innerHTML = `
+        <div class="stat-domain">🌐 ${escapeHtml(domain)}</div>
+        <div class="stat-count">出现站点数：${count}</div>
+        ${firstParties.length ? `<div class="stat-sites">样例：${escapeHtml(firstParties.slice(0, 3).join(', '))}${firstParties.length > 3 ? ' 等' : ''}</div>` : ''}
+      `;
+
+      container.appendChild(item);
+    });
+  });
+}
+
 // 设置事件监听器
 function setupEventListeners() {
   // 添加白名单
@@ -159,6 +204,15 @@ function setupEventListeners() {
     // 这里可以加载更多历史记录
     alert('历史记录加载功能开发中...');
   });
+
+  // 清空学习模式统计
+  document.getElementById('resetLearningStats').addEventListener('click', () => {
+    if (confirm('确定要清空学习模式统计数据吗？')) {
+      chrome.runtime.sendMessage({ action: 'reset_learning_stats' }, () => {
+        loadLearningStats();
+      });
+    }
+  });
 }
 
 // 保存配置
@@ -193,12 +247,17 @@ function saveConfig() {
       webrtcProtection: document.getElementById('webrtcProtection').checked
     };
     
+    config.learningMode = {
+      enabled: document.getElementById('learningModeEnabled').checked
+    };
+    
     config.privacy = {
       anonymousReport: document.getElementById('anonymousReport').checked,
       autoUpdate: document.getElementById('autoUpdate').checked
     };
     
     chrome.storage.local.set({ config }, () => {
+      loadLearningStats();
       alert('设置已保存！');
       
       // 通知background更新
@@ -252,6 +311,7 @@ function clearAllData() {
       loadWhitelist();
       loadHistory();
       loadStats();
+      loadLearningStats();
       alert('所有数据已清除');
     });
   });
@@ -261,6 +321,7 @@ function clearAllData() {
 function resetToDefault() {
   chrome.storage.local.set({ config: getDefaultConfig() }, () => {
     loadConfig();
+    loadLearningStats();
     alert('已重置为默认设置');
   });
 }
@@ -270,8 +331,12 @@ function generateReport() {
   chrome.storage.local.get(['config'], (result) => {
     const config = result.config || getDefaultConfig();
     const stats = config.stats || {};
-    
-    const report = `
+
+    chrome.runtime.sendMessage({ action: 'get_learning_stats' }, (response) => {
+      const learningStats = response?.stats || {};
+      const learningSummary = Object.keys(learningStats).length;
+
+      const report = `
 安全浏览器插件 - 详细报告
 ========================
 
@@ -279,23 +344,25 @@ function generateReport() {
 - 已阻止威胁: ${stats.threatsBlocked || 0} 次
 - 已阻止追踪器: ${stats.trackersBlocked || 0} 个
 - XSS拦截: ${stats.xssIntercepted || 0} 次
+- 学习模式记录第三方域: ${learningSummary} 个
 
 功能状态：
 - URL检测: ${config.urlDetection?.enabled ? '已启用' : '已禁用'}
 - XSS防护: ${config.xssProtection?.enabled ? '已启用' : '已禁用'}
 - 追踪阻止: ${config.trackerBlocking?.enabled ? '已启用' : '已禁用'}
+- 学习模式: ${config.learningMode?.enabled ? '已启用' : '已禁用'}
 
 生成时间: ${new Date().toLocaleString('zh-CN')}
-    `;
-    
-    // 创建下载链接
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `安全报告_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+      `;
+
+      const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `安全报告_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
   });
 }
 
@@ -324,6 +391,9 @@ function getDefaultConfig() {
       thirdPartyCookies: true,
       canvasProtection: true,
       webrtcProtection: true
+    },
+    learningMode: {
+      enabled: false
     },
     whitelist: [],
     stats: {

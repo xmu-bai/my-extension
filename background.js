@@ -25,6 +25,9 @@ const DEFAULT_CONFIG = {
     canvasProtection: true,
     webrtcProtection: true
   },
+  learningMode: {
+    enabled: false
+  },
   whitelist: [],
   stats: {
     threatsBlocked: 0,
@@ -32,6 +35,115 @@ const DEFAULT_CONFIG = {
     xssIntercepted: 0
   }
 };
+
+function cloneDeep(obj) {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(obj);
+  }
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function normalizeConfig(config) {
+  if (!config) {
+    return cloneDeep(DEFAULT_CONFIG);
+  }
+
+  if (!config.urlDetection) {
+    config.urlDetection = cloneDeep(DEFAULT_CONFIG.urlDetection);
+  }
+  if (!config.xssProtection) {
+    config.xssProtection = cloneDeep(DEFAULT_CONFIG.xssProtection);
+  }
+  if (!config.trackerBlocking) {
+    config.trackerBlocking = cloneDeep(DEFAULT_CONFIG.trackerBlocking);
+  }
+  if (!config.learningMode) {
+    config.learningMode = { ...DEFAULT_CONFIG.learningMode };
+  }
+  if (!config.whitelist) {
+    config.whitelist = [];
+  }
+  if (!config.stats) {
+    config.stats = { ...DEFAULT_CONFIG.stats };
+  }
+  if (!config.privacy) {
+    config.privacy = { anonymousReport: true, autoUpdate: true };
+  }
+  return config;
+}
+
+// 学习模式统计数据
+let learningStats = {};
+let learningSaveTimeout = null;
+let currentConfig = cloneDeep(DEFAULT_CONFIG);
+
+chrome.storage.local.get(['config'], (result) => {
+  if (result && result.config) {
+    currentConfig = normalizeConfig(result.config);
+    chrome.storage.local.set({ config: currentConfig });
+  } else {
+    chrome.storage.local.set({ config: currentConfig });
+  }
+});
+
+chrome.storage.local.get(['learningStats'], (result) => {
+  if (result.learningStats && typeof result.learningStats === 'object') {
+    learningStats = result.learningStats;
+  }
+});
+
+function scheduleLearningStatsSave() {
+  if (learningSaveTimeout) {
+    return;
+  }
+  learningSaveTimeout = setTimeout(() => {
+    chrome.storage.local.set({ learningStats }, () => {
+      learningSaveTimeout = null;
+    });
+  }, 1000);
+}
+
+function recordLearningSample(firstParty, thirdParty) {
+  if (!firstParty || !thirdParty) {
+    return;
+  }
+
+  if (!learningStats[thirdParty]) {
+    learningStats[thirdParty] = {
+      firstParties: [],
+      lastSeen: Date.now()
+    };
+  }
+
+  const entry = learningStats[thirdParty];
+  if (!entry.firstParties.includes(firstParty)) {
+    entry.firstParties.push(firstParty);
+  }
+  entry.count = entry.firstParties.length;
+  entry.lastSeen = Date.now();
+
+  scheduleLearningStatsSave();
+}
+
+function resetLearningStats() {
+  learningStats = {};
+  chrome.storage.local.set({ learningStats });
+}
+
+function broadcastLearningMode(enabled) {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach((tab) => {
+      if (tab.id !== undefined) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'learning_mode_updated',
+          enabled
+        }, () => {
+          void chrome.runtime.lastError;
+        });
+      }
+    });
+  });
+}
 
 // 本地恶意URL数据库（示例数据）
 const MALICIOUS_URLS = [
@@ -59,6 +171,9 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get(['config'], (result) => {
     if (!result.config) {
       chrome.storage.local.set({ config: DEFAULT_CONFIG });
+    } else {
+      const config = normalizeConfig(result.config);
+      chrome.storage.local.set({ config });
     }
   });
 });
@@ -82,8 +197,7 @@ async function checkURL(url, tabId) {
       return;
     }
 
-    const result = await chrome.storage.local.get(['config']);
-    const config = result.config || DEFAULT_CONFIG;
+    const config = currentConfig ? normalizeConfig(currentConfig) : cloneDeep(DEFAULT_CONFIG);
     
     if (!config.urlDetection.enabled) {
       return;
@@ -238,13 +352,8 @@ function updateBadge(tabId, status) {
 
 // 更新统计数据
 async function updateStats(type) {
-  const result = await chrome.storage.local.get(['config']);
-  const config = result.config || DEFAULT_CONFIG;
-  
-  if (!config.stats) {
-    config.stats = DEFAULT_CONFIG.stats;
-  }
-  
+  const config = normalizeConfig(cloneDeep(currentConfig));
+
   if (type === 'threatsBlocked') {
     config.stats.threatsBlocked++;
   } else if (type === 'trackersBlocked') {
@@ -252,7 +361,8 @@ async function updateStats(type) {
   } else if (type === 'xssIntercepted') {
     config.stats.xssIntercepted++;
   }
-  
+
+  currentConfig = config;
   await chrome.storage.local.set({ config });
 }
 
@@ -264,6 +374,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'tracker_blocked') {
     updateStats('trackersBlocked');
     sendResponse({ success: true });
+    const firstParty = sender?.tab?.url ? new URL(sender.tab.url).hostname : null;
+    const domain = request.domain;
+    if (firstParty && domain) {
+      const cfg = normalizeConfig(currentConfig);
+      if (cfg.learningMode.enabled) {
+        recordLearningSample(firstParty, domain);
+      }
+    }
   } else if (request.action === 'suspicious_url') {
     // 处理content script检测到的可疑URL参数
     handleSuspiciousURL(request.url, sender.tab?.id);
@@ -310,15 +428,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     return true; // 异步响应
   } else if (request.action === 'get_config') {
-    chrome.storage.local.get(['config'], (result) => {
-      sendResponse({ config: result.config || DEFAULT_CONFIG });
-    });
-    return true; // 异步响应
+    const config = normalizeConfig(cloneDeep(currentConfig));
+    currentConfig = config;
+    sendResponse({ config });
   } else if (request.action === 'update_config') {
-    chrome.storage.local.set({ config: request.config }, () => {
+    const updatedConfig = normalizeConfig(request.config);
+    currentConfig = updatedConfig;
+    chrome.storage.local.set({ config: updatedConfig }, () => {
+      broadcastLearningMode(updatedConfig.learningMode.enabled);
       sendResponse({ success: true });
     });
     return true;
+  } else if (request.action === 'learning_record') {
+    const cfg = normalizeConfig(currentConfig);
+    if (cfg.learningMode.enabled) {
+      recordLearningSample(request.firstParty, request.thirdParty);
+    }
+    sendResponse({ success: true });
+  } else if (request.action === 'get_learning_state') {
+    const cfg = normalizeConfig(cloneDeep(currentConfig));
+    currentConfig = cfg;
+    sendResponse({
+      enabled: cfg.learningMode.enabled
+    });
+  } else if (request.action === 'get_learning_stats') {
+    sendResponse({
+      stats: learningStats
+    });
+  } else if (request.action === 'reset_learning_stats') {
+    resetLearningStats();
+    sendResponse({ success: true });
   }
 });
 
