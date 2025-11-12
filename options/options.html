@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安全浏览器插件 - 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>🔒 安全浏览器插件 - 设置</h1>
+    </header>
+
+    <main class="main-content">
+      <!-- 功能设置 -->
+      <section class="section">
+        <h2 class="section-title">功能设置</h2>
+
+        <!-- URL检测设置 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">🔗</span>
+            <h3>恶意URL检测</h3>
+          </div>
+          <div class="card-content">
+            <div class="setting-item">
+              <label class="setting-label">启用URL检测</label>
+              <label class="switch">
+                <input type="checkbox" id="urlDetectionEnabled" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">数据源选择：</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="dataSource" value="local" checked>
+                  <span>本地缓存数据库</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="dataSource" value="google">
+                  <span>Google Safe Browsing API</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="dataSource" value="thirdParty">
+                  <span>第三方威胁情报源</span>
+                </label>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">检测频率:</label>
+              <select id="checkFrequency" class="select">
+                <option value="realtime">实时检测</option>
+                <option value="onLoad">页面加载时</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- XSS防护设置 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">🛡️</span>
+            <h3>XSS防护</h3>
+          </div>
+          <div class="card-content">
+            <div class="setting-item">
+              <label class="setting-label">启用XSS防护</label>
+              <label class="switch">
+                <input type="checkbox" id="xssProtectionEnabled" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">防护级别:</label>
+              <select id="xssLevel" class="select">
+                <option value="standard">标准防护（推荐）</option>
+                <option value="strict">严格防护</option>
+                <option value="custom">自定义规则</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">自动阻止可疑操作</label>
+              <label class="switch">
+                <input type="checkbox" id="xssAutoBlock" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">显示确认对话框</label>
+              <label class="switch">
+                <input type="checkbox" id="xssShowConfirm">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 追踪阻止设置 -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">🚫</span>
+            <h3>隐私追踪阻止</h3>
+          </div>
+          <div class="card-content">
+            <div class="setting-item">
+              <label class="setting-label">启用追踪阻止</label>
+              <label class="switch">
+                <input type="checkbox" id="trackerBlockingEnabled" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">阻止类型：</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="blockAds" checked>
+                  <span>广告追踪器</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="blockSocial" checked>
+                  <span>社交媒体追踪器</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="blockDataCollection" checked>
+                  <span>数据收集脚本</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="blockFingerprinting" checked>
+                  <span>指纹识别脚本</span>
+                </label>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">第三方Cookie</label>
+              <label class="switch">
+                <input type="checkbox" id="thirdPartyCookies" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">Canvas指纹防护</label>
+              <label class="switch">
+                <input type="checkbox" id="canvasProtection" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">WebRTC防护</label>
+              <label class="switch">
+                <input type="checkbox" id="webrtcProtection" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 白名单管理 -->
+      <section class="section">
+        <h2 class="section-title">白名单管理</h2>
+        <div class="card">
+          <div class="card-content">
+            <div class="whitelist-header">
+              <label class="setting-label">允许的网站</label>
+              <button class="btn btn-primary" id="addWhitelistBtn">+ 添加网站</button>
+            </div>
+            <div class="whitelist-list" id="whitelistList">
+              <!-- 白名单项将通过JS动态添加 -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 历史记录 -->
+      <section class="section">
+        <h2 class="section-title">历史记录</h2>
+        <div class="card">
+          <div class="card-content">
+            <div class="history-list" id="historyList">
+              <!-- 历史记录项将通过JS动态添加 -->
+            </div>
+            <button class="btn btn-secondary" id="loadMoreHistory">查看更多记录...</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 数据统计 -->
+      <section class="section">
+        <h2 class="section-title">数据统计</h2>
+        <div class="card">
+          <div class="card-content">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <span class="stat-icon">🛡️</span>
+                <div class="stat-content">
+                  <div class="stat-value" id="threatsBlocked">0</div>
+                  <div class="stat-label">已阻止威胁</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <span class="stat-icon">🚫</span>
+                <div class="stat-content">
+                  <div class="stat-value" id="trackersBlocked">0</div>
+                  <div class="stat-label">已阻止追踪器</div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <span class="stat-icon">⚠️</span>
+                <div class="stat-content">
+                  <div class="stat-value" id="xssIntercepted">0</div>
+                  <div class="stat-label">XSS拦截</div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="generateReportBtn">生成详细报告</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 隐私设置 -->
+      <section class="section">
+        <h2 class="section-title">隐私设置</h2>
+        <div class="card">
+          <div class="card-content">
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="anonymousReport" checked>
+                <span>匿名化威胁报告（推荐）</span>
+              </label>
+            </div>
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoUpdate" checked>
+                <span>自动更新威胁数据库</span>
+              </label>
+            </div>
+            <div class="action-buttons">
+              <button class="btn btn-danger" id="clearDataBtn">清除所有数据</button>
+              <button class="btn btn-secondary" id="resetBtn">重置为默认设置</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 保存按钮 -->
+      <div class="save-section">
+        <button class="btn btn-primary btn-large" id="saveBtn">保存设置</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
+
