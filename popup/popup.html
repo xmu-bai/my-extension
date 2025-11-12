@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安全浏览器插件</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- 标题栏 -->
+  <div class="header">
+    <div class="header-left">
+      <span class="icon">🔒</span>
+      <span class="title">安全浏览器插件</span>
+    </div>
+    <button class="settings-btn" id="settingsBtn" title="设置">⚙️</button>
+  </div>
+
+  <!-- 安全状态卡片 -->
+  <div class="status-card" id="statusCard">
+    <div class="status-icon" id="statusIcon">✅</div>
+    <div class="status-text">
+      <div class="status-title" id="statusTitle">页面安全</div>
+      <div class="status-desc" id="statusDesc">当前页面未发现威胁</div>
+    </div>
+  </div>
+
+  <!-- 统计信息 -->
+  <div class="stats-section">
+    <div class="stat-item">
+      <span class="stat-icon">🛡️</span>
+      <span class="stat-text">已阻止追踪器: <strong id="trackersCount">0</strong></span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-icon">⚠️</span>
+      <span class="stat-text">XSS防护: <strong id="xssStatus">已启用</strong></span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-icon">🔐</span>
+      <span class="stat-text">URL检测: <strong id="urlStatus">已启用</strong></span>
+    </div>
+  </div>
+
+  <!-- 快速操作 -->
+  <div class="quick-action">
+    <button class="scan-btn" id="scanBtn">
+      <span class="scan-icon">🔍</span>
+      扫描当前页面
+    </button>
+  </div>
+
+  <!-- 功能开关 -->
+  <div class="switches-section">
+    <div class="switch-item">
+      <span class="switch-label">URL检测</span>
+      <label class="switch">
+        <input type="checkbox" id="urlSwitch" checked>
+        <span class="slider"></span>
+      </label>
+      <span class="switch-status" id="urlSwitchStatus">ON</span>
+    </div>
+    <div class="switch-item">
+      <span class="switch-label">XSS防护</span>
+      <label class="switch">
+        <input type="checkbox" id="xssSwitch" checked>
+        <span class="slider"></span>
+      </label>
+      <span class="switch-status" id="xssSwitchStatus">ON</span>
+    </div>
+    <div class="switch-item">
+      <span class="switch-label">追踪阻止</span>
+      <label class="switch">
+        <input type="checkbox" id="trackerSwitch" checked>
+        <span class="slider"></span>
+      </label>
+      <span class="switch-status" id="trackerSwitchStatus">ON</span>
+    </div>
+    <div class="switch-item">
+      <span class="switch-label">当前站点白名单</span>
+      <label class="switch">
+        <input type="checkbox" id="whitelistSwitch">
+        <span class="slider"></span>
+      </label>
+      <span class="switch-status" id="whitelistSwitchStatus">OFF</span>
+    </div>
+  </div>
+
+  <!-- 底部链接 -->
+  <div class="footer">
+    <a href="#" id="reportLink">查看详细报告</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+
