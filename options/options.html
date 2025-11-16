@@ -48,6 +48,23 @@
                 </label>
               </div>
             </div>
+            <div class="setting-item" id="thirdPartySourceItem" style="display: none;">
+              <label class="setting-label">第三方源选择:</label>
+              <select id="thirdPartySource" class="select">
+                <option value="urlhaus">URLhaus (需要 API Key)</option>
+                <option value="openphish">OpenPhish (免费，无需API密钥)</option>
+              </select>
+              <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
+                当前支持 URLhaus，其他源开发中
+              </p>
+            </div>
+            <div class="setting-item" id="thirdPartyApiKeyItem" style="display: none;">
+              <label class="setting-label">API Key (可选):</label>
+              <input type="text" id="thirdPartyApiKey" class="select" placeholder="在 https://auth.abuse.ch/ 免费申请" style="width: 100%; padding: 8px; margin-top: 5px;">
+              <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
+                如果没有 API Key，将回退到本地检测。在 <a href="https://auth.abuse.ch/" target="_blank">https://auth.abuse.ch/</a> 免费申请
+              </p>
+            </div>
             <div class="setting-item">
               <label class="setting-label">检测频率:</label>
               <select id="checkFrequency" class="select">

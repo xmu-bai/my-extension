@@ -20,6 +20,17 @@ function loadConfig() {
     document.querySelector(`input[name="dataSource"][value="${config.urlDetection.dataSource}"]`).checked = true;
     document.getElementById('checkFrequency').value = config.urlDetection.checkFrequency || 'realtime';
     
+    // 第三方源选择
+    const thirdPartySource = config.urlDetection.thirdPartySource || 'urlhaus';
+    document.getElementById('thirdPartySource').value = thirdPartySource;
+    
+    // API Key
+    const thirdPartyApiKey = config.urlDetection.thirdPartyApiKey || '';
+    document.getElementById('thirdPartyApiKey').value = thirdPartyApiKey;
+    
+    // 根据数据源选择显示/隐藏第三方源选择器和 API Key 输入框
+    updateThirdPartySourceVisibility(config.urlDetection.dataSource);
+    
     // XSS防护设置
     document.getElementById('xssProtectionEnabled').checked = config.xssProtection.enabled;
     document.getElementById('xssLevel').value = config.xssProtection.level || 'standard';
@@ -165,8 +176,37 @@ function loadLearningStats() {
   });
 }
 
+// 根据数据源选择显示/隐藏第三方源选择器和 API Key 输入框
+function updateThirdPartySourceVisibility(dataSource) {
+  const thirdPartySourceItem = document.getElementById('thirdPartySourceItem');
+  const thirdPartyApiKeyItem = document.getElementById('thirdPartyApiKeyItem');
+  
+  if (dataSource === 'thirdParty') {
+    if (thirdPartySourceItem) {
+      thirdPartySourceItem.style.display = 'block';
+    }
+    if (thirdPartyApiKeyItem) {
+      thirdPartyApiKeyItem.style.display = 'block';
+    }
+  } else {
+    if (thirdPartySourceItem) {
+      thirdPartySourceItem.style.display = 'none';
+    }
+    if (thirdPartyApiKeyItem) {
+      thirdPartyApiKeyItem.style.display = 'none';
+    }
+  }
+}
+
 // 设置事件监听器
 function setupEventListeners() {
+  // 监听数据源选择变化
+  document.querySelectorAll('input[name="dataSource"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      updateThirdPartySourceVisibility(e.target.value);
+    });
+  });
+  
   // 添加白名单
   document.getElementById('addWhitelistBtn').addEventListener('click', () => {
     const domain = prompt('请输入要添加的网站域名（例如: example.com）:');
@@ -224,7 +264,9 @@ function saveConfig() {
     config.urlDetection = {
       enabled: document.getElementById('urlDetectionEnabled').checked,
       dataSource: document.querySelector('input[name="dataSource"]:checked').value,
-      checkFrequency: document.getElementById('checkFrequency').value
+      checkFrequency: document.getElementById('checkFrequency').value,
+      thirdPartySource: document.getElementById('thirdPartySource').value || 'urlhaus',
+      thirdPartyApiKey: document.getElementById('thirdPartyApiKey').value || ''
     };
     
     config.xssProtection = {
@@ -372,7 +414,9 @@ function getDefaultConfig() {
     urlDetection: {
       enabled: true,
       dataSource: 'local',
-      checkFrequency: 'realtime'
+      checkFrequency: 'realtime',
+      thirdPartySource: 'urlhaus',
+      thirdPartyApiKey: ''
     },
     xssProtection: {
       enabled: true,

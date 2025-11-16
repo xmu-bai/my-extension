@@ -5,7 +5,9 @@ const DEFAULT_CONFIG = {
   urlDetection: {
     enabled: true,
     dataSource: 'local', // 'google', 'thirdParty', 'local'
-    checkFrequency: 'realtime'
+    checkFrequency: 'realtime',
+    thirdPartySource: 'urlhaus', // 'urlhaus', 'openphish', 'virustotal', 'phishtank'
+    thirdPartyApiKey: '' // URLhaus API Key (可选，在 https://auth.abuse.ch/ 免费申请)
   },
   xssProtection: {
     enabled: true,
@@ -50,6 +52,12 @@ function normalizeConfig(config) {
 
   if (!config.urlDetection) {
     config.urlDetection = cloneDeep(DEFAULT_CONFIG.urlDetection);
+  }
+  if (!config.urlDetection.thirdPartySource) {
+    config.urlDetection.thirdPartySource = DEFAULT_CONFIG.urlDetection.thirdPartySource;
+  }
+  if (config.urlDetection.thirdPartyApiKey === undefined) {
+    config.urlDetection.thirdPartyApiKey = DEFAULT_CONFIG.urlDetection.thirdPartyApiKey;
   }
   if (!config.xssProtection) {
     config.xssProtection = cloneDeep(DEFAULT_CONFIG.xssProtection);
@@ -188,6 +196,134 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // 临时允许的URL（用户选择继续访问的恶意URL，本次会话有效）
 const temporaryAllowedUrls = new Set();
 
+// 第三方威胁情报源检测缓存（避免重复请求）
+const threatIntelligenceCache = new Map();
+const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5分钟缓存
+
+// URLhaus API 检测函数
+async function checkURLhaus(url, apiKey) {
+  try {
+    // 如果没有 API Key，记录警告并返回 false
+    if (!apiKey || apiKey.trim() === '') {
+      console.warn('URLhaus API 需要 API Key，请在 https://auth.abuse.ch/ 免费申请并在选项中配置');
+      return false;
+    }
+
+    const formData = new URLSearchParams();
+    formData.append('url', url);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超时
+
+    const response = await fetch('https://urlhaus-api.abuse.ch/v1/url/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Auth-Key': apiKey.trim()
+      },
+      body: formData,
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn('URLhaus API 返回错误状态码:', response.status);
+      return false;
+    }
+
+    // 检查响应内容类型
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // 如果不是 JSON，先读取文本查看内容
+      const text = await response.text();
+      console.warn('URLhaus API 返回非 JSON 响应:', {
+        contentType: contentType,
+        status: response.status,
+        preview: text.substring(0, 200)
+      });
+      return false;
+    }
+
+    const data = await response.json();
+
+    // 检查 API 错误响应
+    if (data.error) {
+      if (data.error === 'Unauthorized') {
+        console.warn('URLhaus API 认证失败，请检查 API Key 是否正确');
+      } else {
+        console.warn('URLhaus API 返回错误:', data.error);
+      }
+      return false;
+    }
+
+    // URLhaus API 响应格式：
+    // - query_status: "ok" 表示找到结果, "no_results" 表示未找到
+    // - url_status: "online" 表示URL在线（恶意）, "offline" 表示已下线
+    if (data.query_status === 'ok' && data.url_status === 'online') {
+      return true; // 检测到恶意URL
+    }
+
+    return false; // 安全URL或未找到结果
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn('URLhaus API 请求超时');
+    } else if (error instanceof SyntaxError) {
+      // JSON 解析错误
+      console.error('URLhaus API 响应格式错误（非 JSON）:', error.message);
+    } else {
+      console.error('URLhaus API 检测错误:', error);
+    }
+    return false; // 出错时返回false，避免误报
+  }
+}
+
+// 第三方威胁情报源检测（统一接口）
+async function checkThirdPartyThreatIntelligence(url, source, apiKey) {
+  // 检查缓存
+  const cacheKey = `${source}:${url}`;
+  const cached = threatIntelligenceCache.get(cacheKey);
+  if (cached) {
+    const now = Date.now();
+    if (now - cached.timestamp < CACHE_EXPIRY_TIME) {
+      return cached.result;
+    }
+    // 缓存过期，删除
+    threatIntelligenceCache.delete(cacheKey);
+  }
+
+  let result = false;
+
+  try {
+    switch (source) {
+      case 'urlhaus':
+        result = await checkURLhaus(url, apiKey);
+        break;
+      // 后续可以添加其他源
+      // case 'openphish':
+      //   result = await checkOpenPhish(url);
+      //   break;
+      // case 'virustotal':
+      //   result = await checkVirusTotal(url, apiKey);
+      //   break;
+      default:
+        console.warn('未知的第三方威胁情报源:', source);
+        return false;
+    }
+
+    // 缓存结果
+    threatIntelligenceCache.set(cacheKey, {
+      result: result,
+      timestamp: Date.now()
+    });
+
+    return result;
+  } catch (error) {
+    console.error('第三方威胁情报源检测失败:', error);
+    return false;
+  }
+}
+
 // URL检测函数
 async function checkURL(url, tabId) {
   try {
@@ -245,7 +381,7 @@ async function detectMaliciousURL(url, config) {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();
     
-    // 本地检测 - 使用精确匹配或后缀匹配
+    // 本地检测 - 使用精确匹配或后缀匹配（优先检测，速度快）
     for (const maliciousDomain of MALICIOUS_URLS) {
       const domain = maliciousDomain.toLowerCase();
       
@@ -261,10 +397,19 @@ async function detectMaliciousURL(url, config) {
       }
     }
     
-    // 如果有Google Safe Browsing API密钥，可以在这里调用
-    // 注意：实际使用时需要申请API密钥
+    // 如果本地检测未命中，根据配置的数据源进行进一步检测
     if (config.dataSource === 'google') {
+      // 如果有Google Safe Browsing API密钥，可以在这里调用
+      // 注意：实际使用时需要申请API密钥
       // return await checkGoogleSafeBrowsing(url);
+    } else if (config.dataSource === 'thirdParty') {
+      // 第三方威胁情报源检测
+      const source = config.thirdPartySource || 'urlhaus';
+      const apiKey = config.thirdPartyApiKey || '';
+      const isMalicious = await checkThirdPartyThreatIntelligence(url, source, apiKey);
+      if (isMalicious) {
+        return true;
+      }
     }
     
     return false;
