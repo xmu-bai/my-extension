@@ -207,3 +207,52 @@ function getDefaultConfig() {
   };
 }
 
+// 向 background 请求预测结果的辅助函数
+function requestPrediction(url) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'predict_url', url }, (resp) => {
+      resolve(resp);
+    });
+  });
+}
+
+// 在 DOMContentLoaded 已经初始化 UI 的基础上，为检测按钮提供后台预测调用（如果页面包含这些按钮）
+document.addEventListener('DOMContentLoaded', () => {
+  const checkUrlBtn = document.getElementById('checkUrl');
+  if (checkUrlBtn) {
+    checkUrlBtn.addEventListener('click', async () => {
+      showLoading();
+      const url = await getCurrentTabUrl();
+      try {
+        const resp = await requestPrediction(url);
+        if (resp && resp.ok && resp.result) {
+          displayResult(url, resp.result);
+        } else {
+          showError(resp && resp.error ? resp.error : '检测失败');
+        }
+      } catch (err) {
+        showError('检测失败: ' + (err && err.message ? err.message : err));
+      }
+    });
+  }
+
+  const checkCustomBtn = document.getElementById('checkCustom');
+  if (checkCustomBtn) {
+    checkCustomBtn.addEventListener('click', async () => {
+      const customUrl = document.getElementById('customUrl')?.value.trim();
+      if (!customUrl) { showError('请输入要检测的URL'); return; }
+      showLoading();
+      try {
+        const resp = await requestPrediction(customUrl);
+        if (resp && resp.ok && resp.result) {
+          displayResult(customUrl, resp.result);
+        } else {
+          showError(resp && resp.error ? resp.error : '检测失败');
+        }
+      } catch (err) {
+        showError('检测失败: ' + (err && err.message ? err.message : err));
+      }
+    });
+  }
+});
+

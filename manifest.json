@@ -47,7 +47,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["warning-pages/*.html", "warning-pages/*.js"],
+      "resources": ["warning-pages/*.html", "warning-pages/*.js", "models/*.json"],
       "matches": ["<all_urls>"]
     }
   ],

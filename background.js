@@ -153,6 +153,178 @@ function broadcastLearningMode(enabled) {
   });
 }
 
+// URLDetector: 在 background 中加载并提供模型预测服务
+class URLDetector {
+  constructor() {
+    this.modelParams = null;
+    this.scalerParams = null;
+    this.selectorInfo = null;
+    this.initialized = false;
+    this.ready = this.loadModels();
+  }
+
+  async loadModels() {
+    try {
+      const modelUrl = chrome.runtime.getURL('models/enhanced_lr_model_params.json');
+      const scalerUrl = chrome.runtime.getURL('models/browser_scaler_params.json');
+      const selectorUrl = chrome.runtime.getURL('models/feature_selector_info.json');
+
+      console.log('Background: 尝试加载模型文件:', modelUrl, scalerUrl, selectorUrl);
+
+      const [modelResponse, scalerResponse, selectorResponse] = await Promise.all([
+        fetch(modelUrl),
+        fetch(scalerUrl),
+        fetch(selectorUrl)
+      ]);
+
+      if (!modelResponse.ok) throw new Error(`Failed to fetch model file: ${modelUrl} status=${modelResponse.status}`);
+      if (!scalerResponse.ok) throw new Error(`Failed to fetch scaler file: ${scalerUrl} status=${scalerResponse.status}`);
+      if (!selectorResponse.ok) throw new Error(`Failed to fetch selector file: ${selectorUrl} status=${selectorResponse.status}`);
+
+      this.modelParams = await modelResponse.json();
+      this.scalerParams = await scalerResponse.json();
+      this.selectorInfo = await selectorResponse.json();
+      this.initialized = true;
+      console.log('Background: 模型加载成功');
+    } catch (error) {
+      this.initialized = false;
+      console.error('Background: 模型加载失败:', error);
+      throw error;
+    }
+  }
+
+  calculateEntropy(text) {
+    if (!text || text.length <= 1) return 0;
+    let entropy = 0;
+    const charCount = {};
+    for (let char of text) {
+      charCount[char] = (charCount[char] || 0) + 1;
+    }
+    for (let char in charCount) {
+      const p = charCount[char] / text.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy;
+  }
+
+  extractAllFeatures(url) {
+    const urlStr = (url || '').toLowerCase();
+    let features = {};
+    try {
+      let processedUrl = urlStr;
+      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        processedUrl = 'http://' + urlStr;
+      }
+      const urlObj = new URL(processedUrl);
+      const domain = urlObj.hostname;
+      const path = urlObj.pathname;
+      const query = urlObj.search;
+
+      features['url_length'] = urlStr.length;
+      features['domain_length'] = domain.length;
+      features['path_length'] = path.length;
+      features['num_subdomains'] = Math.max(0, domain.split('.').length - 2);
+
+      features['num_dots'] = (urlStr.match(/\./g) || []).length;
+      features['num_hyphens'] = (urlStr.match(/-/g) || []).length;
+      features['num_underscores'] = (urlStr.match(/_/g) || []).length;
+      features['num_slashes'] = (urlStr.match(/\//g) || []).length;
+      features['num_question_marks'] = (urlStr.match(/\?/g) || []).length;
+      features['num_equals'] = (urlStr.match(/=/g) || []).length;
+      features['num_amps'] = (urlStr.match(/&/g) || []).length;
+
+      const numDigits = (urlStr.match(/\d/g) || []).length;
+      features['num_digits'] = numDigits;
+      features['digit_ratio'] = numDigits / Math.max(1, urlStr.length);
+
+      const numLetters = (urlStr.match(/[a-z]/g) || []).length;
+      features['letter_ratio'] = numLetters / Math.max(1, urlStr.length);
+
+      features['has_https'] = urlStr.startsWith('https') ? 1 : 0;
+      features['has_http'] = urlStr.startsWith('http://') ? 1 : 0;
+      features['has_port'] = urlObj.port !== '' ? 1 : 0;
+
+      const suspicious_keywords = [
+        'login', 'secure', 'account', 'verify', 'bank', 'pay', 'update',
+        'password', 'confirm', 'signin', 'auth', 'admin', 'php', 'cgi',
+        'wallet', 'bitcoin', 'crypto', 'free', 'win', 'prize', 'click'
+      ];
+
+      let keywordPresence = [];
+      suspicious_keywords.forEach(keyword => {
+        const hasKeyword = urlStr.includes(keyword) ? 1 : 0;
+        features[`has_${keyword}`] = hasKeyword;
+        keywordPresence.push(hasKeyword);
+      });
+
+      features['suspicious_keywords_count'] = keywordPresence.reduce((a, b) => a + b, 0);
+      features['suspicious_keywords_ratio'] = keywordPresence.reduce((a, b) => a + b, 0) / Math.max(1, suspicious_keywords.length);
+
+      features['is_ip'] = /^\d+\.\d+\.\d+\.\d+$/.test(domain) ? 1 : 0;
+      features['has_mixed_chars'] = /[a-z][0-9]|[0-9][a-z]/.test(domain) ? 1 : 0;
+      features['domain_entropy'] = this.calculateEntropy(domain);
+
+      features['path_depth'] = (path.match(/\//g) || []).length - (path === '/' ? 0 : 1);
+      features['has_extension'] = path.includes('.') && !path.endsWith('.') ? 1 : 0;
+      features['has_upper_case'] = /[A-Z]/.test(urlStr) ? 1 : 0;
+
+      features['num_params'] = query ? (query.match(/&/g) || []).length + 1 : 0;
+      features['has_encoded_chars'] = urlStr.includes('%') ? 1 : 0;
+    } catch (error) {
+      console.error('Background: URL解析失败:', error, url);
+      if (this.selectorInfo && Array.isArray(this.selectorInfo.feature_names)) {
+        this.selectorInfo.feature_names.forEach(name => { features[name] = 0; });
+      }
+      features['url_length'] = (url || '').length;
+    }
+
+    return features;
+  }
+
+  selectFeatures(allFeatures) {
+    const allFeaturesArray = (this.selectorInfo && Array.isArray(this.selectorInfo.feature_names)) ?
+      this.selectorInfo.feature_names.map(name => allFeatures[name] || 0) : [];
+    return (this.selectorInfo && Array.isArray(this.selectorInfo.selected_indices)) ?
+      this.selectorInfo.selected_indices.map(idx => allFeaturesArray[idx]) : allFeaturesArray;
+  }
+
+  scaleFeatures(features) {
+    if (!this.scalerParams) return features;
+    return features.map((feature, index) => {
+      const mean = (this.scalerParams.mean && this.scalerParams.mean[index]) || 0;
+      const scale = (this.scalerParams.scale && this.scalerParams.scale[index]) || 1;
+      return (feature - mean) / (scale || 1);
+    });
+  }
+
+  predict(url) {
+    if (!this.initialized) {
+      throw new Error('模型未初始化');
+    }
+    const allFeatures = this.extractAllFeatures(url);
+    const selectedFeatures = this.selectFeatures(allFeatures);
+    const scaledFeatures = this.scaleFeatures(selectedFeatures);
+
+    let score = (this.modelParams && this.modelParams.intercept) || 0;
+    const coefs = (this.modelParams && this.modelParams.coef) || [];
+    for (let i = 0; i < coefs.length; i++) {
+      score += coefs[i] * (scaledFeatures[i] || 0);
+    }
+    const probability = 1 / (1 + Math.exp(-score));
+    return {
+      prediction: probability > 0.5 ? 1 : 0,
+      probability: probability,
+      isMalicious: probability > 0.5,
+      confidence: Math.abs(probability - 0.5) * 2,
+      features: selectedFeatures
+    };
+  }
+}
+
+// 在 background 中创建检测器实例
+const bgDetector = new URLDetector();
+
+
 // 本地恶意URL数据库（示例数据）
 const MALICIOUS_URLS = [
   'phishing-site.com',
@@ -412,6 +584,38 @@ async function detectMaliciousURL(url, config) {
       }
     }
     
+    // 机器学习模型检测（如果模型已加载）
+    // 使用概率阈值（0.7）判断：高于阈值则判为恶意
+    // 阈值可以配置，目前硬编码为 0.7；可在 config 中增加字段 mlThreshold 来支持动态阈值
+    if (bgDetector && bgDetector.initialized) {
+      try {
+        const mlResult = bgDetector.predict(url);
+        const ML_THRESHOLD = 0.7; // 可自定义阈值：0-1 之间，越高越严格
+        
+        // 详细的调试日志：打印特征、模型输出、判定结果
+        console.log(`=== 机器学习模型检测详情 ===`);
+        console.log(`URL: ${url}`);
+        console.log(`模型预测概率: ${(mlResult.probability * 100).toFixed(2)}%`);
+        console.log(`置信度: ${(mlResult.confidence * 100).toFixed(2)}%`);
+        console.log(`原始预测值: ${mlResult.prediction}`);
+        if (mlResult.features && Array.isArray(mlResult.features)) {
+          console.log(`特征向量(前10维): [${mlResult.features.slice(0, 10).map(f => f.toFixed(3)).join(', ')}...]`);
+          console.log(`特征向量总维数: ${mlResult.features.length}`);
+        }
+        console.log(`判定阈值: ${(ML_THRESHOLD * 100).toFixed(1)}%`);
+        console.log(`判定结果: ${mlResult.probability >= ML_THRESHOLD ? '恶意' : '安全'}`);
+        console.log(`=== 机器学习模型检测详情(结束) ===`);
+        
+        if (mlResult && mlResult.probability >= ML_THRESHOLD) {
+          console.warn(`⚠️ Background: ML检测到恶意URL，概率=${(mlResult.probability * 100).toFixed(2)}%，URL=${url}`);
+          return true;
+        }
+      } catch (e) {
+        console.warn('Background: ML预测失败:', e.message, e);
+        // 失败时继续，不中断检测流程
+      }
+    }
+    
     return false;
   } catch (error) {
     console.error('检测恶意URL时出错:', error);
@@ -603,6 +807,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.action === 'reset_learning_stats') {
     resetLearningStats();
     sendResponse({ success: true });
+  } else if (request.action === 'predict_url') {
+    const url = request.url || '';
+    // 确保模型已加载，异步响应
+    bgDetector.ready.then(() => {
+      try {
+        const result = bgDetector.predict(url);
+        sendResponse({ ok: true, result });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+    }).catch((err) => {
+      sendResponse({ ok: false, error: '模型加载失败' });
+    });
+    return true; // 表示异步回复
+  } else if (request.action === 'is_detector_ready') {
+    sendResponse({ ready: !!(bgDetector && bgDetector.initialized) });
   }
 });
 
