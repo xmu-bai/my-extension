@@ -5,10 +5,10 @@
   "description": "集恶意URL检测、XSS防护、隐私追踪阻止于一体的Chrome浏览器安全插件",
   "permissions": [
     "storage",
-    "webRequest",
     "tabs",
     "activeTab",
     "declarativeNetRequest",
+    "alarms",
     "scripting",
     "cookies"
   ],
@@ -23,6 +23,7 @@
       "matches": ["<all_urls>"],
       "js": [
         "utils/whitelist.js",
+        "content-scripts/actions.js",
         "content-scripts/url-checker.js",
         "content-scripts/xss-detector.js",
         "content-scripts/tracker-blocker.js"

@@ -55,6 +55,45 @@
                 <option value="onLoad">页面加载时</option>
               </select>
             </div>
+
+            <hr style="border:none;border-top:1px solid #eee;margin:12px 0;" />
+            <div class="setting-item">
+              <label class="setting-label">URL覆盖采集</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanElements" checked>
+                  <span>扫描页面元素链接（a/img/script/link/iframe/form 等）</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanFetch" checked>
+                  <span>拦截 fetch 请求</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanXHR" checked>
+                  <span>拦截 XHR 请求</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanWebSocket" checked>
+                  <span>拦截 WebSocket 连接</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanWindowOpen" checked>
+                  <span>拦截 window.open 跳转</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanMetaRefresh" checked>
+                  <span>检测 meta refresh 跳转</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="scanCssUrls">
+                  <span>解析 CSS url(...)（可能影响性能）</span>
+                </label>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">URL 去重 TTL（毫秒）</label>
+              <input type="number" id="dedupeTtlMs" class="select" min="1000" step="1000" value="120000" style="max-width: 180px;">
+            </div>
           </div>
         </div>
 
@@ -215,6 +254,40 @@
               </div>
             </div>
             <button class="btn btn-primary" id="generateReportBtn">生成详细报告</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 威胁数据库（在线源/刷新/导入导出） -->
+      <section class="section">
+        <h2 class="section-title">威胁数据库</h2>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-icon">📚</span>
+            <h3>在线源与刷新</h3>
+          </div>
+          <div class="card-content">
+            <div class="setting-item">
+              <label class="setting-label">在线源（每行一个URL，支持JSON或纯文本列表）</label>
+              <textarea id="dbSources" rows="5" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" placeholder="例如：\nhttps://example.com/malicious.json\nhttps://example.org/blocklist.txt" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+            </div>
+            <div class="setting-item">
+              <label class="setting-label">自动刷新间隔（小时，最小0.5小时）</label>
+              <input type="number" id="refreshIntervalHours" class="select" min="0.5" step="0.5" value="24" style="max-width: 140px;">
+            </div>
+            <div class="setting-item" style="display:flex; gap:12px; flex-wrap: wrap; align-items: center;">
+              <button class="btn btn-primary" id="refreshDbBtn">立即刷新</button>
+              <button class="btn btn-secondary" id="importDbBtn">导入</button>
+              <input type="file" id="importDbFile" accept=".json,.txt" style="display:none;" />
+              <button class="btn" id="exportDbBtn" style="background:#4CAF50;color:#fff;">导出</button>
+              <div id="dbStatus" style="color:#666; font-size:12px;">
+                <span>域名：<strong id="dbDomainsCount">0</strong></span>
+                <span style="margin:0 8px;">|</span>
+                <span>正则：<strong id="dbPatternsCount">0</strong></span>
+                <span style="margin:0 8px;">|</span>
+                <span>上次更新：<strong id="dbUpdatedAt">-</strong></span>
+              </div>
+            </div>
           </div>
         </div>
       </section>

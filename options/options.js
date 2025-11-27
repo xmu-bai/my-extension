@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadWhitelist();
   loadHistory();
   loadStats();
+  loadDbStats();
   setupEventListeners();
 });
 
@@ -18,6 +19,20 @@ function loadConfig() {
     document.getElementById('urlDetectionEnabled').checked = config.urlDetection.enabled;
     document.querySelector(`input[name="dataSource"][value="${config.urlDetection.dataSource}"]`).checked = true;
     document.getElementById('checkFrequency').value = config.urlDetection.checkFrequency || 'realtime';
+    // URL覆盖采集
+    document.getElementById('scanElements').checked = config.urlDetection.scanElements !== false;
+    document.getElementById('scanFetch').checked = config.urlDetection.scanFetch !== false;
+    document.getElementById('scanXHR').checked = config.urlDetection.scanXHR !== false;
+    document.getElementById('scanWebSocket').checked = config.urlDetection.scanWebSocket !== false;
+    document.getElementById('scanWindowOpen').checked = config.urlDetection.scanWindowOpen !== false;
+    document.getElementById('scanMetaRefresh').checked = config.urlDetection.scanMetaRefresh !== false;
+    document.getElementById('scanCssUrls').checked = !!config.urlDetection.scanCssUrls;
+    document.getElementById('dedupeTtlMs').value = Number(config.urlDetection.dedupeTtlMs || 120000);
+
+    // 恶意库在线源与刷新间隔
+    const sources = Array.isArray(config.urlDetection.sources) ? config.urlDetection.sources : [];
+    document.getElementById('dbSources').value = sources.join('\n');
+    document.getElementById('refreshIntervalHours').value = config.urlDetection.refreshIntervalHours || 24;
     
     // XSS防护设置
     document.getElementById('xssProtectionEnabled').checked = config.xssProtection.enabled;
@@ -159,6 +174,90 @@ function setupEventListeners() {
     // 这里可以加载更多历史记录
     alert('历史记录加载功能开发中...');
   });
+
+  // 恶意库：立即刷新
+  const refreshBtn = document.getElementById('refreshDbBtn');
+  refreshBtn.addEventListener('click', async () => {
+    try {
+      refreshBtn.disabled = true;
+      const originalText = refreshBtn.textContent;
+      refreshBtn.textContent = '刷新中...';
+      const res = await chrome.runtime.sendMessage({ action: 'refresh_malicious_db' });
+      await loadDbStats();
+      alert(res && res.success ? `刷新完成，新增 ${res.added || 0} 项` : '刷新失败');
+      refreshBtn.textContent = originalText;
+      refreshBtn.disabled = false;
+    } catch (e) {
+      alert('刷新失败：' + e);
+      refreshBtn.disabled = false;
+    }
+  });
+
+  // 恶意库：导入（文件）
+  const importBtn = document.getElementById('importDbBtn');
+  const importFile = document.getElementById('importDbFile');
+  importBtn.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      let domains = [];
+      let patterns = [];
+      const trimmed = text.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        // JSON 格式
+        const data = JSON.parse(trimmed);
+        if (Array.isArray(data)) {
+          // 纯数组 => 按行解析为域名
+          domains = data.map(String);
+        } else {
+          if (Array.isArray(data.domains)) domains = data.domains;
+          if (Array.isArray(data.patterns)) patterns = data.patterns;
+          // 兼容部分格式：如 list 字段
+          if (Array.isArray(data.list) && domains.length === 0 && patterns.length === 0) {
+            domains = data.list.map(String);
+          }
+        }
+      } else {
+        // 纯文本：每行一个，/#...#/ 视为正则
+        trimmed.split(/\r?\n/).forEach(line => {
+          const s = line.trim();
+          if (!s || s.startsWith('#')) return;
+          if (s.startsWith('/') && s.endsWith('/')) {
+            patterns.push(s.slice(1, -1));
+          } else {
+            domains.push(s);
+          }
+        });
+      }
+      const resp = await chrome.runtime.sendMessage({ action: 'import_malicious_list', domains, patterns });
+      if (resp && resp.success) {
+        await loadDbStats();
+        alert(`导入成功。当前：域名 ${resp.counts?.domains ?? '-'}，正则 ${resp.counts?.patterns ?? '-'}`);
+      } else {
+        alert('导入失败：' + (resp && resp.error ? resp.error : '未知错误'));
+      }
+    } catch (err) {
+      alert('解析/导入失败：' + err);
+    } finally {
+      // 重置文件选择
+      e.target.value = '';
+    }
+  });
+
+  // 恶意库：导出（读取本地存储的 maliciousDb）
+  document.getElementById('exportDbBtn').addEventListener('click', async () => {
+    const { maliciousDb } = await chrome.storage.local.get(['maliciousDb']);
+    const data = maliciousDb || { domains: [], patterns: [], updatedAt: 0 };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `malicious-db-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
 }
 
 // 保存配置
@@ -170,7 +269,22 @@ function saveConfig() {
     config.urlDetection = {
       enabled: document.getElementById('urlDetectionEnabled').checked,
       dataSource: document.querySelector('input[name="dataSource"]:checked').value,
-      checkFrequency: document.getElementById('checkFrequency').value
+      checkFrequency: document.getElementById('checkFrequency').value,
+      // 采集开关
+      scanElements: document.getElementById('scanElements').checked,
+      scanFetch: document.getElementById('scanFetch').checked,
+      scanXHR: document.getElementById('scanXHR').checked,
+      scanWebSocket: document.getElementById('scanWebSocket').checked,
+      scanWindowOpen: document.getElementById('scanWindowOpen').checked,
+      scanMetaRefresh: document.getElementById('scanMetaRefresh').checked,
+      scanCssUrls: document.getElementById('scanCssUrls').checked,
+      dedupeTtlMs: Math.max(1000, Number(document.getElementById('dedupeTtlMs').value || 120000)),
+      // 同步恶意库在线源与刷新间隔
+      sources: document.getElementById('dbSources').value
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean),
+      refreshIntervalHours: Math.max(0.5, Number(document.getElementById('refreshIntervalHours').value || 24))
     };
     
     config.xssProtection = {
@@ -318,7 +432,18 @@ function getDefaultConfig() {
     urlDetection: {
       enabled: true,
       dataSource: 'local',
-      checkFrequency: 'realtime'
+      checkFrequency: 'realtime',
+      // 覆盖采集默认开启（CSS 解析默认关闭）
+      scanElements: true,
+      scanFetch: true,
+      scanXHR: true,
+      scanWebSocket: true,
+      scanWindowOpen: true,
+      scanMetaRefresh: true,
+      scanCssUrls: false,
+      dedupeTtlMs: 120000,
+      sources: [],
+      refreshIntervalHours: 24
     },
     xssProtection: {
       enabled: true,
@@ -378,6 +503,20 @@ function formatTime(date) {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+}
+
+// 加载恶意库统计信息
+async function loadDbStats() {
+  try {
+    const resp = await chrome.runtime.sendMessage({ action: 'get_malicious_db' });
+    const db = resp && resp.db ? resp.db : { count: { domains: 0, patterns: 0 }, updatedAt: 0 };
+    document.getElementById('dbDomainsCount').textContent = db.count?.domains ?? 0;
+    document.getElementById('dbPatternsCount').textContent = db.count?.patterns ?? 0;
+    const t = db.updatedAt ? new Date(db.updatedAt) : null;
+    document.getElementById('dbUpdatedAt').textContent = t ? t.toLocaleString('zh-CN') : '-';
+  } catch (e) {
+    // 忽略错误
   }
 }
 
