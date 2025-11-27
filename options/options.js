@@ -17,19 +17,34 @@ function loadConfig() {
     
     // URL检测设置
     document.getElementById('urlDetectionEnabled').checked = config.urlDetection.enabled;
-    document.querySelector(`input[name="dataSource"][value="${config.urlDetection.dataSource}"]`).checked = true;
+    const dataSource = config.urlDetection.dataSource || 'local';
+    document.querySelector(`input[name="dataSource"][value="${dataSource}"]`).checked = true;
     document.getElementById('checkFrequency').value = config.urlDetection.checkFrequency || 'realtime';
     
-    // 第三方源选择
-    const thirdPartySource = config.urlDetection.thirdPartySource || 'urlhaus';
-    document.getElementById('thirdPartySource').value = thirdPartySource;
+    // API 服务配置
+    const apiService = config.urlDetection.apiService || { type: 'preset', presetType: 'urlhaus', apiUrl: '', apiKey: '' };
     
-    // API Key
-    const thirdPartyApiKey = config.urlDetection.thirdPartyApiKey || '';
-    document.getElementById('thirdPartyApiKey').value = thirdPartyApiKey;
+    // 兼容旧配置格式
+    if (config.urlDetection.dataSource === 'google' || config.urlDetection.dataSource === 'thirdParty') {
+      // 迁移旧配置
+      apiService.type = 'preset';
+      apiService.presetType = config.urlDetection.dataSource === 'google' ? 'google' : (config.urlDetection.thirdPartySource || 'urlhaus');
+      apiService.apiKey = config.urlDetection.thirdPartyApiKey || '';
+      apiService.apiUrl = '';
+    }
     
-    // 根据数据源选择显示/隐藏第三方源选择器和 API Key 输入框
-    updateThirdPartySourceVisibility(config.urlDetection.dataSource);
+    document.getElementById('apiServiceType').value = apiService.type || 'preset';
+    document.getElementById('presetServiceSelect').value = apiService.presetType || 'urlhaus';
+    document.getElementById('apiKey').value = apiService.apiKey || '';
+    document.getElementById('customApiUrl').value = apiService.apiUrl || '';
+    document.getElementById('customApiKey').value = apiService.apiKey || '';
+    
+    // 根据数据源选择显示/隐藏 API 服务配置区域
+    updateApiServiceVisibility(dataSource);
+    // 根据服务类型显示/隐藏预设或自定义配置
+    updateServiceTypeVisibility(apiService.type || 'preset');
+    // 根据预设服务选择显示/隐藏服务信息
+    updatePresetServiceInfo(apiService.presetType || 'urlhaus');
     
     // XSS防护设置
     document.getElementById('xssProtectionEnabled').checked = config.xssProtection.enabled;
@@ -176,26 +191,42 @@ function loadLearningStats() {
   });
 }
 
-// 根据数据源选择显示/隐藏第三方源选择器和 API Key 输入框
-function updateThirdPartySourceVisibility(dataSource) {
-  const thirdPartySourceItem = document.getElementById('thirdPartySourceItem');
-  const thirdPartyApiKeyItem = document.getElementById('thirdPartyApiKeyItem');
+// 根据数据源选择显示/隐藏 API 服务配置区域
+function updateApiServiceVisibility(dataSource) {
+  const apiServiceConfig = document.getElementById('apiServiceConfig');
   
-  if (dataSource === 'thirdParty') {
-    if (thirdPartySourceItem) {
-      thirdPartySourceItem.style.display = 'block';
-    }
-    if (thirdPartyApiKeyItem) {
-      thirdPartyApiKeyItem.style.display = 'block';
+  if (dataSource === 'api') {
+    if (apiServiceConfig) {
+      apiServiceConfig.style.display = 'block';
     }
   } else {
-    if (thirdPartySourceItem) {
-      thirdPartySourceItem.style.display = 'none';
-    }
-    if (thirdPartyApiKeyItem) {
-      thirdPartyApiKeyItem.style.display = 'none';
+    if (apiServiceConfig) {
+      apiServiceConfig.style.display = 'none';
     }
   }
+}
+
+// 根据服务类型显示/隐藏预设或自定义配置
+function updateServiceTypeVisibility(serviceType) {
+  const presetConfig = document.getElementById('presetServiceConfig');
+  const customConfig = document.getElementById('customServiceConfig');
+  
+  if (serviceType === 'preset') {
+    if (presetConfig) presetConfig.style.display = 'block';
+    if (customConfig) customConfig.style.display = 'none';
+  } else if (serviceType === 'custom') {
+    if (presetConfig) presetConfig.style.display = 'none';
+    if (customConfig) customConfig.style.display = 'block';
+  }
+}
+
+// 根据预设服务选择显示/隐藏服务信息
+function updatePresetServiceInfo(presetType) {
+  const googleInfo = document.getElementById('googleServiceInfo');
+  const urlhausInfo = document.getElementById('urlhausServiceInfo');
+  
+  if (googleInfo) googleInfo.style.display = presetType === 'google' ? 'block' : 'none';
+  if (urlhausInfo) urlhausInfo.style.display = presetType === 'urlhaus' ? 'block' : 'none';
 }
 
 // 设置事件监听器
@@ -203,8 +234,18 @@ function setupEventListeners() {
   // 监听数据源选择变化
   document.querySelectorAll('input[name="dataSource"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
-      updateThirdPartySourceVisibility(e.target.value);
+      updateApiServiceVisibility(e.target.value);
     });
+  });
+  
+  // 监听服务类型变化
+  document.getElementById('apiServiceType').addEventListener('change', (e) => {
+    updateServiceTypeVisibility(e.target.value);
+  });
+  
+  // 监听预设服务选择变化
+  document.getElementById('presetServiceSelect').addEventListener('change', (e) => {
+    updatePresetServiceInfo(e.target.value);
   });
   
   // 添加白名单
@@ -261,12 +302,33 @@ function saveConfig() {
     const config = result.config || getDefaultConfig();
     
     // 更新配置
+    const dataSource = document.querySelector('input[name="dataSource"]:checked').value;
+    const apiServiceType = document.getElementById('apiServiceType').value;
+    
+    let apiService = {
+      type: apiServiceType,
+      presetType: 'urlhaus',
+      apiUrl: '',
+      apiKey: ''
+    };
+    
+    if (apiServiceType === 'preset') {
+      // 预设服务配置
+      apiService.presetType = document.getElementById('presetServiceSelect').value || 'urlhaus';
+      apiService.apiKey = document.getElementById('apiKey').value || '';
+      apiService.apiUrl = ''; // 预设服务不需要用户填写 URL
+    } else if (apiServiceType === 'custom') {
+      // 自定义服务配置
+      apiService.presetType = null;
+      apiService.apiUrl = document.getElementById('customApiUrl').value || '';
+      apiService.apiKey = document.getElementById('customApiKey').value || '';
+    }
+    
     config.urlDetection = {
       enabled: document.getElementById('urlDetectionEnabled').checked,
-      dataSource: document.querySelector('input[name="dataSource"]:checked').value,
+      dataSource: dataSource,
       checkFrequency: document.getElementById('checkFrequency').value,
-      thirdPartySource: document.getElementById('thirdPartySource').value || 'urlhaus',
-      thirdPartyApiKey: document.getElementById('thirdPartyApiKey').value || ''
+      apiService: apiService
     };
     
     config.xssProtection = {
@@ -415,8 +477,12 @@ function getDefaultConfig() {
       enabled: true,
       dataSource: 'local',
       checkFrequency: 'realtime',
-      thirdPartySource: 'urlhaus',
-      thirdPartyApiKey: ''
+      apiService: {
+        type: 'preset',
+        presetType: 'urlhaus',
+        apiUrl: '',
+        apiKey: ''
+      }
     },
     xssProtection: {
       enabled: true,

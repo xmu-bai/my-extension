@@ -1,13 +1,37 @@
 // 后台服务脚本 - 负责URL检测、请求拦截和状态管理
 
+// 预设的 API 服务配置
+const PRESET_API_SERVICES = {
+  google: {
+    name: 'Google Safe Browsing',
+    apiUrl: 'https://safebrowsing.googleapis.com/v4/threatMatches:find?key=',
+    description: 'Google Safe Browsing API',
+    keyUrl: 'https://console.cloud.google.com/apis/credentials',
+    method: 'POST',
+    contentType: 'application/json'
+  },
+  urlhaus: {
+    name: 'URLhaus',
+    apiUrl: 'https://urlhaus-api.abuse.ch/v1/url/',
+    description: 'URLhaus Threat Intelligence',
+    keyUrl: 'https://auth.abuse.ch/',
+    method: 'POST',
+    contentType: 'application/x-www-form-urlencoded'
+  }
+};
+
 // 默认配置
 const DEFAULT_CONFIG = {
   urlDetection: {
     enabled: true,
-    dataSource: 'local', // 'google', 'thirdParty', 'local'
+    dataSource: 'local', // 'local', 'api'
     checkFrequency: 'realtime',
-    thirdPartySource: 'urlhaus', // 'urlhaus', 'openphish', 'virustotal', 'phishtank'
-    thirdPartyApiKey: '' // URLhaus API Key (可选，在 https://auth.abuse.ch/ 免费申请)
+    apiService: {
+      type: 'preset', // 'preset' 或 'custom'
+      presetType: 'urlhaus', // 'google', 'urlhaus', 仅当 type='preset' 时有效
+      apiUrl: '', // 自定义 API URL，仅当 type='custom' 时使用
+      apiKey: '' // API Key
+    }
   },
   xssProtection: {
     enabled: true,
@@ -53,11 +77,33 @@ function normalizeConfig(config) {
   if (!config.urlDetection) {
     config.urlDetection = cloneDeep(DEFAULT_CONFIG.urlDetection);
   }
-  if (!config.urlDetection.thirdPartySource) {
-    config.urlDetection.thirdPartySource = DEFAULT_CONFIG.urlDetection.thirdPartySource;
+  // 兼容旧配置格式
+  if (config.urlDetection.dataSource === 'google' || config.urlDetection.dataSource === 'thirdParty') {
+    // 迁移旧配置到新格式
+    if (!config.urlDetection.apiService) {
+      config.urlDetection.apiService = {
+        type: 'preset',
+        presetType: config.urlDetection.dataSource === 'google' ? 'google' : (config.urlDetection.thirdPartySource || 'urlhaus'),
+        apiUrl: '',
+        apiKey: config.urlDetection.thirdPartyApiKey || ''
+      };
+    }
+    config.urlDetection.dataSource = 'api';
   }
-  if (config.urlDetection.thirdPartyApiKey === undefined) {
-    config.urlDetection.thirdPartyApiKey = DEFAULT_CONFIG.urlDetection.thirdPartyApiKey;
+  if (!config.urlDetection.apiService) {
+    config.urlDetection.apiService = cloneDeep(DEFAULT_CONFIG.urlDetection.apiService);
+  }
+  if (!config.urlDetection.apiService.type) {
+    config.urlDetection.apiService.type = DEFAULT_CONFIG.urlDetection.apiService.type;
+  }
+  if (!config.urlDetection.apiService.presetType) {
+    config.urlDetection.apiService.presetType = DEFAULT_CONFIG.urlDetection.apiService.presetType;
+  }
+  if (config.urlDetection.apiService.apiKey === undefined) {
+    config.urlDetection.apiService.apiKey = DEFAULT_CONFIG.urlDetection.apiService.apiKey;
+  }
+  if (config.urlDetection.apiService.apiUrl === undefined) {
+    config.urlDetection.apiService.apiUrl = DEFAULT_CONFIG.urlDetection.apiService.apiUrl;
   }
   if (!config.xssProtection) {
     config.xssProtection = cloneDeep(DEFAULT_CONFIG.xssProtection);
@@ -200,6 +246,81 @@ const temporaryAllowedUrls = new Set();
 const threatIntelligenceCache = new Map();
 const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5分钟缓存
 
+// Google Safe Browsing API 检测函数
+async function checkGoogleSafeBrowsing(url, apiKey) {
+  try {
+    // 如果没有 API Key，记录警告并返回 false
+    if (!apiKey || apiKey.trim() === '') {
+      console.warn('Google Safe Browsing API 需要 API Key，请在 https://console.cloud.google.com/apis/credentials 申请并在选项中配置');
+      return false;
+    }
+
+    // Google Safe Browsing API v4 需要客户端信息
+    const clientId = 'security-extension';
+    const clientVersion = '1.0.0';
+
+    // 准备请求体
+    const requestBody = {
+      client: {
+        clientId: clientId,
+        clientVersion: clientVersion
+      },
+      threatInfo: {
+        threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE', 'POTENTIALLY_HARMFUL_APPLICATION'],
+        platformTypes: ['ANY_PLATFORM'],
+        threatEntryTypes: ['URL'],
+        threatEntries: [
+          { url: url }
+        ]
+      }
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+
+    const apiUrl = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${encodeURIComponent(apiKey.trim())}`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        console.warn('Google Safe Browsing API 请求格式错误');
+      } else if (response.status === 403) {
+        console.warn('Google Safe Browsing API 认证失败，请检查 API Key 是否正确');
+      } else {
+        console.warn('Google Safe Browsing API 返回错误状态码:', response.status);
+      }
+      return false;
+    }
+
+    const data = await response.json();
+
+    // 如果有 matches 字段且不为空，说明检测到威胁
+    if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
+      return true; // 检测到恶意URL
+    }
+
+    return false; // 安全URL
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn('Google Safe Browsing API 请求超时');
+    } else if (error instanceof SyntaxError) {
+      console.error('Google Safe Browsing API 响应格式错误（非 JSON）:', error.message);
+    } else {
+      console.error('Google Safe Browsing API 检测错误:', error);
+    }
+    return false; // 出错时返回false，避免误报
+  }
+}
+
 // URLhaus API 检测函数
 async function checkURLhaus(url, apiKey) {
   try {
@@ -278,10 +399,22 @@ async function checkURLhaus(url, apiKey) {
   }
 }
 
-// 第三方威胁情报源检测（统一接口）
-async function checkThirdPartyThreatIntelligence(url, source, apiKey) {
+// API 服务检测（统一接口）
+async function checkApiService(url, apiServiceConfig) {
+  if (!apiServiceConfig) {
+    return false;
+  }
+
+  const { type, presetType, apiUrl, apiKey } = apiServiceConfig;
+
+  // 检查是否有 API Key
+  if (!apiKey || apiKey.trim() === '') {
+    console.warn('API 服务需要 API Key，请在选项中配置');
+    return false;
+  }
+
   // 检查缓存
-  const cacheKey = `${source}:${url}`;
+  const cacheKey = `${type}:${presetType || 'custom'}:${apiUrl || ''}:${url}`;
   const cached = threatIntelligenceCache.get(cacheKey);
   if (cached) {
     const now = Date.now();
@@ -295,20 +428,29 @@ async function checkThirdPartyThreatIntelligence(url, source, apiKey) {
   let result = false;
 
   try {
-    switch (source) {
-      case 'urlhaus':
-        result = await checkURLhaus(url, apiKey);
-        break;
-      // 后续可以添加其他源
-      // case 'openphish':
-      //   result = await checkOpenPhish(url);
-      //   break;
-      // case 'virustotal':
-      //   result = await checkVirusTotal(url, apiKey);
-      //   break;
-      default:
-        console.warn('未知的第三方威胁情报源:', source);
+    if (type === 'preset') {
+      // 使用预设服务
+      switch (presetType) {
+        case 'google':
+          result = await checkGoogleSafeBrowsing(url, apiKey);
+          break;
+        case 'urlhaus':
+          result = await checkURLhaus(url, apiKey);
+          break;
+        default:
+          console.warn('未知的预设 API 服务:', presetType);
+          return false;
+      }
+    } else if (type === 'custom') {
+      // 自定义 API 服务
+      if (!apiUrl || apiUrl.trim() === '') {
+        console.warn('自定义 API 服务需要提供 API URL');
         return false;
+      }
+      result = await checkCustomApi(url, apiUrl, apiKey);
+    } else {
+      console.warn('未知的 API 服务类型:', type);
+      return false;
     }
 
     // 缓存结果
@@ -319,7 +461,85 @@ async function checkThirdPartyThreatIntelligence(url, source, apiKey) {
 
     return result;
   } catch (error) {
-    console.error('第三方威胁情报源检测失败:', error);
+    console.error('API 服务检测失败:', error);
+    return false;
+  }
+}
+
+// 自定义 API 服务检测（通用接口）
+async function checkCustomApi(url, apiUrl, apiKey) {
+  try {
+    // 尝试作为 JSON API 调用
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+
+    // 尝试 POST JSON
+    const jsonResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'X-API-Key': apiKey.trim()
+      },
+      body: JSON.stringify({ url: url }),
+      signal: controller.signal
+    }).catch(() => null);
+
+    clearTimeout(timeoutId);
+
+    if (jsonResponse && jsonResponse.ok) {
+      const contentType = jsonResponse.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await jsonResponse.json();
+        // 简单检测：如果响应中包含 "malicious", "threat", "danger" 等关键词，认为是恶意
+        const responseText = JSON.stringify(data).toLowerCase();
+        if (responseText.includes('malicious') || responseText.includes('threat') || 
+            responseText.includes('danger') || responseText.includes('blocked')) {
+          return true;
+        }
+      }
+    }
+
+    // 如果 JSON 失败，尝试表单提交
+    const formController = new AbortController();
+    const formTimeoutId = setTimeout(() => formController.abort(), 5000);
+
+    const formData = new URLSearchParams();
+    formData.append('url', url);
+
+    const formResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'X-API-Key': apiKey.trim(),
+        'Auth-Key': apiKey.trim()
+      },
+      body: formData,
+      signal: formController.signal
+    });
+
+    clearTimeout(formTimeoutId);
+
+    if (formResponse.ok) {
+      const contentType = formResponse.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await formResponse.json();
+        const responseText = JSON.stringify(data).toLowerCase();
+        if (responseText.includes('malicious') || responseText.includes('threat') || 
+            responseText.includes('danger') || responseText.includes('blocked')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn('自定义 API 请求超时');
+    } else {
+      console.error('自定义 API 检测错误:', error);
+    }
     return false;
   }
 }
@@ -398,15 +618,10 @@ async function detectMaliciousURL(url, config) {
     }
     
     // 如果本地检测未命中，根据配置的数据源进行进一步检测
-    if (config.dataSource === 'google') {
-      // 如果有Google Safe Browsing API密钥，可以在这里调用
-      // 注意：实际使用时需要申请API密钥
-      // return await checkGoogleSafeBrowsing(url);
-    } else if (config.dataSource === 'thirdParty') {
-      // 第三方威胁情报源检测
-      const source = config.thirdPartySource || 'urlhaus';
-      const apiKey = config.thirdPartyApiKey || '';
-      const isMalicious = await checkThirdPartyThreatIntelligence(url, source, apiKey);
+    if (config.dataSource === 'api') {
+      // API 服务检测
+      const apiServiceConfig = config.apiService || {};
+      const isMalicious = await checkApiService(url, apiServiceConfig);
       if (isMalicious) {
         return true;
       }

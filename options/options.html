@@ -39,31 +39,68 @@
                   <span>本地缓存数据库</span>
                 </label>
                 <label class="radio-label">
-                  <input type="radio" name="dataSource" value="google">
-                  <span>Google Safe Browsing API</span>
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="dataSource" value="thirdParty">
-                  <span>第三方威胁情报源</span>
+                  <input type="radio" name="dataSource" value="api">
+                  <span>API 服务（需要 API Key）</span>
                 </label>
               </div>
             </div>
-            <div class="setting-item" id="thirdPartySourceItem" style="display: none;">
-              <label class="setting-label">第三方源选择:</label>
-              <select id="thirdPartySource" class="select">
-                <option value="urlhaus">URLhaus (需要 API Key)</option>
-                <option value="openphish">OpenPhish (免费，无需API密钥)</option>
-              </select>
-              <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
-                当前支持 URLhaus，其他源开发中
-              </p>
-            </div>
-            <div class="setting-item" id="thirdPartyApiKeyItem" style="display: none;">
-              <label class="setting-label">API Key (可选):</label>
-              <input type="text" id="thirdPartyApiKey" class="select" placeholder="在 https://auth.abuse.ch/ 免费申请" style="width: 100%; padding: 8px; margin-top: 5px;">
-              <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
-                如果没有 API Key，将回退到本地检测。在 <a href="https://auth.abuse.ch/" target="_blank">https://auth.abuse.ch/</a> 免费申请
-              </p>
+            <!-- API 服务配置区域 -->
+            <div id="apiServiceConfig" style="display: none; margin-top: 16px; padding: 16px; background: #f5f5f5; border-radius: 8px;">
+              <div class="setting-item">
+                <label class="setting-label">服务类型：</label>
+                <select id="apiServiceType" class="select">
+                  <option value="preset">预设服务</option>
+                  <option value="custom">自定义 API</option>
+                </select>
+              </div>
+              
+              <!-- 预设服务配置 -->
+              <div id="presetServiceConfig" style="margin-top: 12px;">
+                <div class="setting-item">
+                  <label class="setting-label">预设服务选择：</label>
+                  <select id="presetServiceSelect" class="select">
+                    <option value="google">Google Safe Browsing</option>
+                    <option value="urlhaus">URLhaus</option>
+                  </select>
+                </div>
+                <div class="setting-item" id="googleServiceInfo" style="margin-top: 8px; padding: 8px; background: #fff; border-radius: 4px;">
+                  <p class="helper-text" style="margin: 0; color: #666; font-size: 12px;">
+                    <strong>API URL:</strong> <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 2px;">https://safebrowsing.googleapis.com/v4/threatMatches:find?key=</code><br>
+                    <strong>申请 API Key:</strong> <a href="https://console.cloud.google.com/apis/credentials" target="_blank">https://console.cloud.google.com/apis/credentials</a>
+                  </p>
+                </div>
+                <div class="setting-item" id="urlhausServiceInfo" style="margin-top: 8px; padding: 8px; background: #fff; border-radius: 4px; display: none;">
+                  <p class="helper-text" style="margin: 0; color: #666; font-size: 12px;">
+                    <strong>API URL:</strong> <code style="background: #f0f0f0; padding: 2px 4px; border-radius: 2px;">https://urlhaus-api.abuse.ch/v1/url/</code><br>
+                    <strong>申请 API Key:</strong> <a href="https://auth.abuse.ch/" target="_blank">https://auth.abuse.ch/</a>
+                  </p>
+                </div>
+                <div class="setting-item" style="margin-top: 12px;">
+                  <label class="setting-label">API Key：</label>
+                  <input type="text" id="apiKey" class="select" placeholder="请输入您的 API Key" style="width: 100%; padding: 8px; margin-top: 5px;">
+                  <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
+                    请在上方选择的服务提供商处申请 API Key
+                  </p>
+                </div>
+              </div>
+              
+              <!-- 自定义 API 配置 -->
+              <div id="customServiceConfig" style="margin-top: 12px; display: none;">
+                <div class="setting-item">
+                  <label class="setting-label">API URL：</label>
+                  <input type="text" id="customApiUrl" class="select" placeholder="https://api.example.com/check" style="width: 100%; padding: 8px; margin-top: 5px;">
+                  <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
+                    请输入完整的 API 端点地址
+                  </p>
+                </div>
+                <div class="setting-item" style="margin-top: 12px;">
+                  <label class="setting-label">API Key：</label>
+                  <input type="text" id="customApiKey" class="select" placeholder="请输入您的 API Key" style="width: 100%; padding: 8px; margin-top: 5px;">
+                  <p class="helper-text" style="margin-top: 8px; color: #666; font-size: 12px;">
+                    自定义 API 支持 JSON POST 或表单 POST 请求
+                  </p>
+                </div>
+              </div>
             </div>
             <div class="setting-item">
               <label class="setting-label">检测频率:</label>
