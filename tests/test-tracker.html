@@ -1,0 +1,513 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tracker Blocker Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+    .test-section {
+      background: white;
+      border-left: 4px solid #2196F3;
+      margin: 20px 0;
+      padding: 15px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #2196F3;
+      font-size: 18px;
+    }
+    .test-result {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 13px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+    }
+    .blocked {
+      background: #c8e6c9;
+      border-left: 3px solid #4CAF50;
+    }
+    .allowed {
+      background: #ffcdd2;
+      border-left: 3px solid #f44336;
+    }
+    .pending {
+      background: #fff9c4;
+      border-left: 3px solid #FBC02D;
+    }
+    code {
+      background: #f0f0f0;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    button {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #1976D2;
+    }
+    .summary {
+      background: #E3F2FD;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔒 Tracker Blocker Test Page</h1>
+  <p>此页面用于验证浏览器扩展的追踪器阻止功能。所有测试结果会在下方实时显示。</p>
+
+  <div class="summary">
+    <h3>ℹ️ 使用说明</h3>
+    <ol>
+      <li>打开此页面，所有测试会自动运行。</li>
+      <li>打开 <strong>浏览器开发者工具</strong>（F12）的 <strong>Network 标签页</strong>，观察请求是否被阻止（显示 <code>Blocked by client</code>）。</li>
+      <li>同时观察 <strong>Console 标签页</strong>，查看页面或扩展的日志信息。</li>
+      <li>查看 Service Worker 控制台（<code>chrome://extensions</code> -> 扩展 -> "Service Worker (inspect views)"），观察后台日志。</li>
+      <li>点击下方按钮触发更多测试。</li>
+    </ol>
+  </div>
+
+  <!-- 1. 外部脚本加载测试 -->
+  <div class="test-section">
+    <h2>1️⃣ 外部追踪脚本加载测试</h2>
+    <p>尝试动态加载来自 <code>google-analytics.com</code> 的脚本。</p>
+    <button onclick="testExternalScript('googletagmanager')">测试 googletagmanager</button>
+    <button onclick="testExternalScript('doubleclick')">测试 doubleclick</button>
+    <div id="script-results"></div>
+  </div>
+
+  <!-- 2. Fetch 请求测试 -->
+  <div class="test-section">
+    <h2>2️⃣ Fetch 请求测试</h2>
+    <p>尝试 fetch 请求到常见追踪端点。</p>
+    <button onclick="testFetch('google-analytics')">Fetch google-analytics.com</button>
+    <button onclick="testFetch('doubleclick')">Fetch doubleclick.net</button>
+    <button onclick="testFetch('facebook')">Fetch facebook.com</button>
+    <div id="fetch-results"></div>
+  </div>
+
+  <!-- 3. XMLHttpRequest 测试 -->
+  <div class="test-section">
+    <h2>3️⃣ XMLHttpRequest 测试</h2>
+    <p>尝试 XHR 请求到常见追踪端点。</p>
+    <button onclick="testXHR('google-analytics')">XHR google-analytics.com</button>
+    <button onclick="testXHR('doubleclick')">XHR doubleclick.net</button>
+    <div id="xhr-results"></div>
+  </div>
+
+  <!-- 4. Navigator.sendBeacon 测试 -->
+  <div class="test-section">
+    <h2>4️⃣ Navigator.sendBeacon 测试</h2>
+    <p>尝试用 <code>navigator.sendBeacon</code> 向追踪端点发送数据。</p>
+    <button onclick="testSendBeacon('google-analytics')">sendBeacon google-analytics.com</button>
+    <button onclick="testSendBeacon('doubleclick')">sendBeacon doubleclick.net</button>
+    <div id="beacon-results"></div>
+  </div>
+
+  <!-- 5. 图片资源测试 -->
+  <div class="test-section">
+    <h2>5️⃣ 图片资源测试</h2>
+    <p>尝试加载来自追踪域名的图片（1x1 像素追踪 pixel）。</p>
+    <button onclick="testImagePixel('doubleclick')">加载 doubleclick 像素</button>
+    <button onclick="testImagePixel('facebook')">加载 facebook 像素</button>
+    <div id="image-results"></div>
+  </div>
+
+  <!-- 6. 追踪 URL 列表 -->
+  <div class="test-section">
+    <h2>📋 追踪器域名列表</h2>
+    <p>扩展正在尝试阻止来自以下域名的请求：</p>
+    <ul id="tracker-list"></ul>
+  </div>
+
+  <!-- 7. 状态与调试 -->
+  <div class="test-section">
+    <h2>🔧 扩展状态与调试</h2>
+    <button onclick="checkExtensionReady()">检查扩展就绪状态</button>
+    <button onclick="dumpDNRRules()">查询 DNR 规则（Service Worker 控制台）</button>
+    <button onclick="dumpLearningStats()">查询学习模式统计（Service Worker 控制台）</button>
+    <button onclick="checkConfig()">查询当前配置（Service Worker 控制台）</button>
+    <div id="status-results"></div>
+  </div>
+
+  <script>
+    // 追踪器域名（与 background.js 保持一致）
+    const TRACKER_DOMAINS = [
+      'google-analytics.com',
+      'googletagmanager.com',
+      'facebook.com',
+      'doubleclick.net',
+      'scorecardresearch.com',
+      'adservice.google',
+      'adservice.google.com',
+      'ads.facebook.com',
+      'analytics.twitter.com'
+    ];
+
+    // 显示追踪器列表
+    document.addEventListener('DOMContentLoaded', () => {
+      const list = document.getElementById('tracker-list');
+      TRACKER_DOMAINS.forEach(domain => {
+        const li = document.createElement('li');
+        li.textContent = domain;
+        list.appendChild(li);
+      });
+      console.log('[TEST PAGE READY] Tracker blocker test page loaded. All tests ready.');
+    });
+
+    // 工具函数：添加结果到 UI
+    function addResult(containerId, testName, status, message) {
+      const container = document.getElementById(containerId);
+      const result = document.createElement('div');
+      result.className = `test-result ${status}`;
+      result.innerHTML = `<strong>[${status.toUpperCase()}]</strong> ${testName}<br/><small>${message}</small>`;
+      container.appendChild(result);
+      console.log(`[${status.toUpperCase()}] ${testName}: ${message}`);
+    }
+
+    // 1. 外部脚本加载测试
+    function testExternalScript(type) {
+      let src = '';
+      if (type === 'googletagmanager') {
+        src = 'https://www.googletagmanager.com/gtag/js?id=TEST';
+      } else if (type === 'doubleclick') {
+        src = 'https://www.doubleclick.net/script.js';
+      }
+
+      const script = document.createElement('script');
+      script.src = src;
+      const timestamp = new Date().toLocaleTimeString();
+      
+      script.onload = () => {
+        addResult('script-results', `脚本加载 (${type})`, 'allowed', 
+          `⚠️ 脚本在 ${timestamp} 加载成功（不应发生）- 检查 DNR 规则`);
+      };
+      
+      script.onerror = (e) => {
+        addResult('script-results', `脚本加载 (${type})`, 'blocked', 
+          `✓ 脚本在 ${timestamp} 加载失败（预期被阻止）`);
+      };
+
+      script.onabort = () => {
+        addResult('script-results', `脚本加载 (${type})`, 'blocked', 
+          `✓ 脚本加载被中止（预期被阻止）`);
+      };
+
+      document.head.appendChild(script);
+      
+      // 设置超时，防止长时间等待
+      setTimeout(() => {
+        if (!script.onload && !script.onerror) {
+          addResult('script-results', `脚本加载 (${type})`, 'pending', 
+            `⏳ 脚本加载超时（可能被 DNR 阻止，但未触发 error 事件）`);
+        }
+      }, 3000);
+    }
+
+    // 2. Fetch 请求测试
+    function testFetch(type) {
+      let url = '';
+      if (type === 'google-analytics') {
+        url = 'https://www.google-analytics.com/collect';
+      } else if (type === 'doubleclick') {
+        url = 'https://www.doubleclick.net/pixel';
+      } else if (type === 'facebook') {
+        url = 'https://www.facebook.com/tr/';
+      }
+
+      const timestamp = new Date().toLocaleTimeString();
+      fetch(url, { method: 'POST', mode: 'no-cors' })
+        .then(response => {
+          addResult('fetch-results', `Fetch ${type}`, 'allowed', 
+            `⚠️ Fetch 在 ${timestamp} 返回（不应发生）- 状态: ${response.status}`);
+        })
+        .catch(error => {
+          const msg = error.message || error.toString();
+          if (msg.includes('Blocked') || msg.includes('blocked')) {
+            addResult('fetch-results', `Fetch ${type}`, 'blocked', 
+              `✓ Fetch 被扩展阻止（${timestamp}）: ${msg}`);
+          } else {
+            addResult('fetch-results', `Fetch ${type}`, 'pending', 
+              `⏳ Fetch 出错（${timestamp}），可能被阻止或网络错误: ${msg}`);
+          }
+        });
+    }
+
+    // 3. XMLHttpRequest 测试
+    function testXHR(type) {
+      let url = '';
+      if (type === 'google-analytics') {
+        url = 'https://www.google-analytics.com/collect';
+      } else if (type === 'doubleclick') {
+        url = 'https://www.doubleclick.net/pixel';
+      }
+
+      const timestamp = new Date().toLocaleTimeString();
+      const xhr = new XMLHttpRequest();
+      xhr.onload = () => {
+        addResult('xhr-results', `XHR ${type}`, 'allowed', 
+          `⚠️ XHR 在 ${timestamp} 加载成功（不应发生）- 状态: ${xhr.status}`);
+      };
+
+      xhr.onerror = () => {
+        addResult('xhr-results', `XHR ${type}`, 'blocked', 
+          `✓ XHR 在 ${timestamp} 加载失败（预期被阻止）`);
+      };
+
+      xhr.onabort = () => {
+        addResult('xhr-results', `XHR ${type}`, 'blocked', 
+          `✓ XHR 在 ${timestamp} 被中止（预期被阻止）`);
+      };
+
+      try {
+        xhr.open('GET', url, true);
+        xhr.send();
+      } catch (e) {
+        addResult('xhr-results', `XHR ${type}`, 'blocked', 
+          `✓ XHR.send() 抛出异常（${timestamp}）: ${e.message}`);
+      }
+
+      // 设置超时检测
+      setTimeout(() => {
+        if (!xhr.onload && !xhr.onerror && !xhr.onabort) {
+          addResult('xhr-results', `XHR ${type}`, 'pending', 
+            `⏳ XHR 超时（${timestamp}），可能被 DNR 或页面层拦截阻止）`);
+        }
+      }, 3000);
+    }
+
+    // 4. Navigator.sendBeacon 测试
+    function testSendBeacon(type) {
+      let url = '';
+      if (type === 'google-analytics') {
+        url = 'https://www.google-analytics.com/collect';
+      } else if (type === 'doubleclick') {
+        url = 'https://www.doubleclick.net/beacon';
+      }
+
+      const timestamp = new Date().toLocaleTimeString();
+      try {
+        const result = navigator.sendBeacon(url, 'test-data');
+        if (result) {
+          addResult('beacon-results', `sendBeacon ${type}`, 'allowed', 
+            `⚠️ sendBeacon 在 ${timestamp} 返回 true（不应发生）`);
+        } else {
+          addResult('beacon-results', `sendBeacon ${type}`, 'blocked', 
+            `✓ sendBeacon 在 ${timestamp} 返回 false（预期被阻止）`);
+        }
+      } catch (e) {
+        addResult('beacon-results', `sendBeacon ${type}`, 'blocked', 
+          `✓ sendBeacon 在 ${timestamp} 抛出异常（预期被阻止）: ${e.message}`);
+      }
+    }
+
+    // 5. 图片资源测试
+    function testImagePixel(type) {
+      let src = '';
+      if (type === 'doubleclick') {
+        src = 'https://www.doubleclick.net/pixel';
+      } else if (type === 'facebook') {
+        src = 'https://www.facebook.com/tr/';
+      }
+
+      const img = new Image();
+      const timestamp = new Date().toLocaleTimeString();
+      
+      img.onload = () => {
+        addResult('image-results', `图片像素 ${type}`, 'allowed', 
+          `⚠️ 图片在 ${timestamp} 加载成功（不应发生）`);
+      };
+
+      img.onerror = () => {
+        addResult('image-results', `图片像素 ${type}`, 'blocked', 
+          `✓ 图片在 ${timestamp} 加载失败（预期被阻止）`);
+      };
+
+      img.onabort = () => {
+        addResult('image-results', `图片像素 ${type}`, 'blocked', 
+          `✓ 图片在 ${timestamp} 加载被中止（预期被阻止）`);
+      };
+
+      img.src = src;
+      document.body.appendChild(img);
+
+      setTimeout(() => {
+        if (!img.onload && !img.onerror && !img.onabort) {
+          addResult('image-results', `图片像素 ${type}`, 'pending', 
+            `⏳ 图片在 ${timestamp} 加载超时（可能被阻止）`);
+        }
+      }, 3000);
+    }
+
+    // 辅助函数：安全发送消息到后台
+    // 通过 content script bridge 进行通信
+    let messageId = 0;
+    const pendingMessages = new Map();
+
+    function safeMessageToBackground(action, callback) {
+      // 通过 postMessage 与 content script 通信
+      const id = ++messageId;
+      
+      window.postMessage(
+        {
+          type: 'EXTENSION_MESSAGE',
+          id,
+          action,
+          payload: {}
+        },
+        '*'
+      );
+
+      // 设置响应监听（一次性）
+      const responseListener = (event) => {
+        if (event.source !== window) return;
+        if (!event.data || event.data.type !== 'EXTENSION_RESPONSE' || event.data.id !== id) {
+          return;
+        }
+
+        window.removeEventListener('message', responseListener);
+        pendingMessages.delete(id);
+
+        if (event.data.error) {
+          console.error('[ERROR] 扩展通信失败:', event.data.error);
+          if (callback) callback(null, event.data.error);
+        } else {
+          if (callback) callback(event.data.response, null);
+        }
+      };
+
+      pendingMessages.set(id, responseListener);
+      window.addEventListener('message', responseListener);
+
+      // 设置超时（5秒）
+      setTimeout(() => {
+        if (pendingMessages.has(id)) {
+          pendingMessages.delete(id);
+          window.removeEventListener('message', responseListener);
+          const timeoutMsg = '扩展响应超时（5秒）。请检查：1) 扩展是否已加载 2) Service Worker 是否活跃';
+          console.error('[ERROR]', timeoutMsg);
+          if (callback) callback(null, timeoutMsg);
+        }
+      }, 5000);
+    }
+
+    // 6. 扩展状态检查
+    function checkExtensionReady() {
+      safeMessageToBackground('is_detector_ready', (response, error) => {
+        if (error) {
+          addResult('status-results', '扩展就绪状态', 'blocked', 
+            `❌ 扩展通信失败：${error}`);
+        } else if (response) {
+          addResult('status-results', '扩展就绪状态', 'allowed', 
+            `✓ 扩展已就绪，ML 检测器: ${response.ready ? '✓ 已初始化' : '✗ 未初始化'}`);
+        } else {
+          addResult('status-results', '扩展就绪状态', 'blocked', 
+            `❌ 未收到响应`);
+        }
+      });
+    }
+
+    // 7. 查询 DNR 规则
+    function dumpDNRRules() {
+      safeMessageToBackground('get_dnr_rules', (response, error) => {
+        if (error) {
+          addResult('status-results', 'DNR 规则查询', 'blocked', 
+            `❌ 获取失败：${error}`);
+        } else if (response && response.rules) {
+          const rules = response.rules;
+          console.log('[DNR Rules] 当前动态规则数:', rules.length);
+          console.log('[DNR Rules] 完整规则列表:', rules);
+          if (rules.length > 0) {
+            console.log('[DNR Rules] 前 5 条规则:', rules.slice(0, 5));
+            addResult('status-results', 'DNR 规则查询', 'allowed', 
+              `✓ 已应用 ${rules.length} 条 DNR 规则（详见 Console）`);
+          } else {
+            addResult('status-results', 'DNR 规则查询', 'blocked', 
+              `⚠️ 未找到 DNR 规则。检查 background.js 是否正确初始化`);
+          }
+        }
+      });
+    }
+
+    // 8. 查询学习模式统计
+    function dumpLearningStats() {
+      safeMessageToBackground('get_learning_stats', (response, error) => {
+        if (error) {
+          addResult('status-results', '学习模式统计', 'blocked', 
+            `❌ 获取失败：${error}`);
+        } else if (response && response.stats) {
+          const statsSize = Object.keys(response.stats).length;
+          console.log('[Learning Stats] 完整统计数据:', response.stats);
+          if (statsSize > 0) {
+            addResult('status-results', '学习模式统计', 'allowed', 
+              `✓ 已记录 ${statsSize} 个第三方域（详见 Console）`);
+          } else {
+            addResult('status-results', '学习模式统计', 'pending', 
+              `⏳ 未记录数据（学习模式可能未启用或需要访问更多页面）`);
+          }
+        }
+      });
+    }
+
+    // 9. 查询配置
+    function checkConfig() {
+      safeMessageToBackground('get_config', (response, error) => {
+        if (error) {
+          addResult('status-results', '当前配置查询', 'blocked', 
+            `❌ 获取失败：${error}`);
+        } else if (response && response.config) {
+          const cfg = response.config;
+          console.log('[Config] 当前配置:', cfg);
+          console.log('  - URL 检测:', cfg.urlDetection?.enabled ? '启用' : '禁用');
+          console.log('  - XSS 防护:', cfg.xssProtection?.enabled ? '启用' : '禁用');
+          console.log('  - 追踪器阻止:', cfg.trackerBlocking?.enabled ? '启用' : '禁用');
+          console.log('  - 学习模式:', cfg.learningMode?.enabled ? '启用' : '禁用');
+          console.log('  - 统计:', cfg.stats);
+          const trackerEnabled = cfg.trackerBlocking?.enabled ? '✓ 启用' : '✗ 禁用';
+          addResult('status-results', '当前配置查询', 'allowed', 
+            `✓ 追踪器阻止: ${trackerEnabled}，学习模式: ${cfg.learningMode?.enabled ? '✓' : '✗'}（详见 Console）`);
+        }
+      });
+    }
+
+    // 页面加载时的自动测试日志
+    window.addEventListener('load', () => {
+      console.log('=========== Tracker Blocker Test Page Loaded ===========');
+      console.log('页面已加载。');
+      console.log('说明：');
+      console.log('  1. 打开浏览器 DevTools (F12)');
+      console.log('  2. 查看 Network 标签页，观察请求是否被阻止（Blocked by client）');
+      console.log('  3. 查看 Console 标签页，查看此页面的日志');
+      console.log('  4. 打开扩展的 Service Worker 控制台（chrome://extensions -> 扩展 -> Service Worker）');
+      console.log('  5. 点击页面上的按钮触发测试');
+      console.log('=====================================================');
+    });
+  </script>
+</body>
+</html>

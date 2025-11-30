@@ -29,6 +29,12 @@
       ],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": ["http://localhost:*/tests/*", "http://127.0.0.1:*/tests/*"],
+      "js": ["tests/content-script-bridge.js"],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "action": {

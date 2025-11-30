@@ -11,7 +11,7 @@
   chrome.runtime.sendMessage({ action: 'get_config' }, (response) => {
     if (response && response.config) {
       config = response.config;
-      if (config.trackerBlocking.enabled) {
+      if (config.trackerBlocking && config.trackerBlocking.enabled) {
         initializeTrackerBlocking();
       }
     }
@@ -19,109 +19,102 @@
 
   // 初始化追踪阻止
   function initializeTrackerBlocking() {
-    // 阻止Canvas指纹识别
-    if (config.trackerBlocking.canvasProtection) {
-      protectCanvasFingerprinting();
-    }
+    try {
+      if (config.trackerBlocking && config.trackerBlocking.canvasProtection) {
+        protectCanvasFingerprinting();
+      }
 
-    // 阻止WebRTC泄漏
-    if (config.trackerBlocking.webrtcProtection) {
       protectWebRTCLeak();
-    }
-
-    // 阻止第三方Cookie
-    if (config.trackerBlocking.thirdPartyCookies) {
       protectThirdPartyCookies();
+      removeTrackingScripts();
+
+      // 注入网络拦截器（合并内置 blocklist 与 fallback_blocklist）
+      injectNetworkInterceptor();
+    } catch (e) {
+      console.warn('initializeTrackerBlocking error', e);
     }
-
-    // 移除追踪脚本
-    removeTrackingScripts();
-
-    console.log('隐私追踪阻止已启动');
   }
 
-  // 保护Canvas指纹识别
+  // 保护 Canvas（简单包装，避免抛出）
   function protectCanvasFingerprinting() {
-    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-    const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-
-    // 干扰Canvas指纹
-    HTMLCanvasElement.prototype.toDataURL = function() {
-      const context = this.getContext('2d');
-      if (context) {
-        // 添加随机噪声
-        const imageData = context.getImageData(0, 0, this.width, this.height);
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          imageData.data[i] += Math.floor(Math.random() * 3) - 1;
-        }
-        context.putImageData(imageData, 0, 0);
-      }
-      return originalToDataURL.apply(this, arguments);
-    };
-
-    CanvasRenderingContext2D.prototype.getImageData = function() {
-      const imageData = originalGetImageData.apply(this, arguments);
-      // 添加轻微噪声
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        imageData.data[i] += Math.floor(Math.random() * 2) - 1;
-      }
-      return imageData;
-    };
-  }
-
-  // 保护WebRTC IP泄漏
-  function protectWebRTCLeak() {
-    // 拦截RTCPeerConnection
-    if (window.RTCPeerConnection) {
-      const OriginalRTCPeerConnection = window.RTCPeerConnection;
-      window.RTCPeerConnection = function(...args) {
-        const pc = new OriginalRTCPeerConnection(...args);
-        
-        // 拦截createDataChannel
-        const originalCreateDataChannel = pc.createDataChannel;
-        pc.createDataChannel = function(...args) {
-          console.warn('WebRTC createDataChannel调用被阻止');
-          return null;
-        };
-        
-        return pc;
-      };
-      
-      window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    }
-  }
-
-  // 保护第三方Cookie
-  function protectThirdPartyCookies() {
-    // 拦截document.cookie的设置
-    const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
-    if (originalCookieDescriptor && originalCookieDescriptor.set) {
-      Object.defineProperty(document, 'cookie', {
-        set: function(value) {
-          // 检查是否是第三方Cookie
-          if (isThirdPartyCookie(value)) {
-            console.log('第三方Cookie被阻止:', value);
-            return;
+    try {
+      const proto = HTMLCanvasElement && HTMLCanvasElement.prototype;
+      if (!proto) return;
+      const _toDataURL = proto.toDataURL;
+      if (typeof _toDataURL === 'function') {
+        proto.toDataURL = function() {
+          try {
+            return _toDataURL.apply(this, arguments);
+          } catch (e) {
+            return '';
           }
-          originalCookieDescriptor.set.call(this, value);
-        },
-        get: originalCookieDescriptor.get,
-        configurable: true
-      });
+        };
+      }
+      const _toBlob = proto.toBlob;
+      if (typeof _toBlob === 'function') {
+        proto.toBlob = function() {
+          try {
+            return _toBlob.apply(this, arguments);
+          } catch (e) {
+            if (arguments && typeof arguments[arguments.length - 1] === 'function') {
+              try { arguments[arguments.length - 1](null); } catch (e) {}
+            }
+          }
+        };
+      }
+    } catch (e) {
+      // ignore
     }
   }
 
-  // 判断是否是第三方Cookie
+  // 保护 WebRTC（占位，不做破坏性改动）
+  function protectWebRTCLeak() {
+    try {
+      // 目前作为最小侵入处理，仅记录
+      if (window.RTCPeerConnection) {
+        // 不主动修改，为兼容性保守处理
+      }
+    } catch (e) {}
+  }
+
+  // 尝试阻止第三方Cookie写入（简单策略）
+  function protectThirdPartyCookies() {
+    try {
+      const docProto = Document.prototype;
+      const original = Object.getOwnPropertyDescriptor(docProto, 'cookie');
+      if (!original || !original.configurable) return;
+
+      Object.defineProperty(docProto, 'cookie', {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+          try {
+            return original.get.call(this);
+          } catch (e) {
+            return '';
+          }
+        },
+        set: function(val) {
+          try {
+            if (isThirdPartyCookie(val)) {
+              // 阻止第三方 cookie 写入
+              console.info('Blocked third-party cookie set attempt:', val);
+              return;
+            }
+          } catch (e) {}
+          return original.set.call(this, val);
+        }
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 简单的第三方Cookie检测（关键字匹配）
   function isThirdPartyCookie(cookieString) {
     try {
-      const domain = cookieString.split(';')[0].split('=')[0];
-      const currentDomain = window.location.hostname;
-      
-      // 简单的第三方检测（实际需要更复杂的逻辑）
       const trackingKeywords = ['track', 'analytics', 'ad', 'pixel'];
-      return trackingKeywords.some(keyword => 
-        cookieString.toLowerCase().includes(keyword)
-      );
+      return trackingKeywords.some(keyword => cookieString.toLowerCase().includes(keyword));
     } catch (e) {
       return false;
     }
@@ -139,24 +132,28 @@
 
     // 移除现有脚本
     document.querySelectorAll('script[src]').forEach(script => {
-      const src = script.src;
-      if (trackingPatterns.some(pattern => pattern.test(src))) {
-        blockTracker(src);
-        script.remove();
-      }
+      try {
+        const src = script.src;
+        if (trackingPatterns.some(pattern => pattern.test(src))) {
+          blockTracker(src);
+          script.remove();
+        }
+      } catch (e) {}
     });
 
     // 监控新添加的脚本
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node.tagName === 'SCRIPT' && node.src) {
-            const src = node.src;
-            if (trackingPatterns.some(pattern => pattern.test(src))) {
-              blockTracker(src);
-              node.remove();
+          try {
+            if (node.tagName === 'SCRIPT' && node.src) {
+              const src = node.src;
+              if (trackingPatterns.some(pattern => pattern.test(src))) {
+                blockTracker(src);
+                node.remove();
+              }
             }
-          }
+          } catch (e) {}
         });
       });
     });
@@ -165,6 +162,116 @@
       childList: true,
       subtree: true
     });
+  }
+
+  // 在页面上下文注入脚本以覆盖 fetch/XHR/sendBeacon
+  function injectNetworkInterceptor() {
+    try {
+      const builtinBlocklist = [
+        'google-analytics.com',
+        'googletagmanager.com',
+        'facebook.com',
+        'doubleclick.net',
+        'scorecardresearch.com',
+        'adservice.google',
+        'adservice.google.com',
+        'ads.facebook.com',
+        'analytics.twitter.com'
+      ];
+
+      chrome.storage.local.get(['fallback_blocklist'], (res) => {
+        try {
+          const fallback = Array.isArray(res && res.fallback_blocklist) ? res.fallback_blocklist : [];
+          const merged = Array.from(new Set(builtinBlocklist.concat(fallback)));
+
+          const injectedCode = `(() => {
+            const BLOCKLIST = ${JSON.stringify(merged)};
+
+            function isBlockedUrl(url) {
+              try {
+                if (!url) return false;
+                let hostname = '';
+                try {
+                  const resolved = new URL(url, location.href);
+                  hostname = resolved.hostname || '';
+                } catch (e) {
+                  hostname = String(url || '');
+                }
+                hostname = hostname.toLowerCase();
+                return BLOCKLIST.some(domain => hostname.indexOf(domain.toLowerCase()) !== -1 || hostname === domain.toLowerCase());
+              } catch (e) { return false; }
+            }
+
+            const _fetch = window.fetch;
+            if (_fetch) {
+              window.fetch = function(input, init) {
+                try {
+                  const url = (typeof input === 'string') ? input : (input && input.url) || '';
+                  if (isBlockedUrl(url)) {
+                    console.warn('fetch to tracker blocked by extension (injected):', url);
+                    return Promise.reject(new Error('Blocked by extension'));
+                  }
+                } catch (e) {}
+                return _fetch.apply(this, arguments);
+              };
+            }
+
+            const _open = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+            if (_open) {
+              window.XMLHttpRequest.prototype.open = function(method, url) {
+                try {
+                  if (isBlockedUrl(url)) {
+                    console.warn('XHR to tracker blocked by extension (injected):', url);
+                    this._blocked_by_extension = true;
+                  }
+                } catch (e) {}
+                return _open.apply(this, arguments);
+              };
+              const _send = window.XMLHttpRequest.prototype.send;
+              if (_send) {
+                window.XMLHttpRequest.prototype.send = function() {
+                  if (this._blocked_by_extension) {
+                    try {
+                      this._blocked_by_extension = false;
+                      const evt = new Event('error');
+                      this.dispatchEvent(evt);
+                    } catch (e) {}
+                    return;
+                  }
+                  return _send.apply(this, arguments);
+                };
+              }
+            }
+
+            if (navigator && navigator.sendBeacon) {
+              try {
+                const _sendBeacon = navigator.sendBeacon.bind(navigator);
+                navigator.sendBeacon = function(url, data) {
+                  try {
+                    if (isBlockedUrl(url)) {
+                      console.warn('sendBeacon to tracker blocked by extension (injected):', url);
+                      return false;
+                    }
+                  } catch (e) { console.error('sendBeacon override error', e); }
+                  return _sendBeacon(url, data);
+                };
+              } catch (e) {}
+            }
+
+            try { window.__extensionNetworkInterceptor = { isBlockedUrl }; } catch (e) {}
+          })();`;
+
+          const script = document.createElement('script');
+          script.textContent = injectedCode;
+          (document.documentElement || document.head || document.body || document).appendChild(script);
+          script.remove();
+        } catch (e) {
+          console.warn('注入网络拦截器失败（构建注入代码）:', e);
+        }
+      });
+    } catch (e) {
+      console.warn('注入网络拦截器失败:', e);
+    }
   }
 
   // 阻止追踪器
@@ -177,7 +284,7 @@
         if (window.learningModeReporter && typeof window.learningModeReporter.record === 'function') {
           window.learningModeReporter.record(domain);
         }
-        
+
         // 向background报告
         chrome.runtime.sendMessage({
           action: 'tracker_blocked',

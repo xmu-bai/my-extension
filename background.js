@@ -362,6 +362,29 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'loading' && tab.url) {
     checkURL(tab.url, tabId);
+    try {
+      const url = String(tab.url || '');
+      // 注入到所有 HTTP/HTTPS 页面（排除浏览器内部页和扩展页），以在页面主世界尽早覆盖网络 API
+      if (/^https?:\/\//.test(url) &&
+          !url.startsWith('chrome://') &&
+          !url.startsWith('chrome-extension://') &&
+          !url.startsWith('about:') &&
+          !url.startsWith('file:')) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabId, allFrames: false },
+          files: ['tests/page-injector.js'],
+          world: 'MAIN'
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('注入 page-injector 失败:', chrome.runtime.lastError);
+          } else {
+            console.log('已向 tab', tabId, '注入 page-injector.js');
+          }
+        });
+      }
+    } catch (e) {
+      console.error('tabs.onUpdated 注入异常:', e);
+    }
   }
 });
 
@@ -780,6 +803,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const config = normalizeConfig(cloneDeep(currentConfig));
     currentConfig = config;
     sendResponse({ config });
+  } else if (request.action === 'get_dnr_rules') {
+    // 查询当前 DNR 规则（仅在 Service Worker 中可用）
+    chrome.declarativeNetRequest.getDynamicRules((rules) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ rules: rules || [] });
+      }
+    });
+    return true; // 异步响应
   } else if (request.action === 'update_config') {
     const updatedConfig = normalizeConfig(request.config);
     currentConfig = updatedConfig;
@@ -823,6 +856,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // 表示异步回复
   } else if (request.action === 'is_detector_ready') {
     sendResponse({ ready: !!(bgDetector && bgDetector.initialized) });
+  } else if (request.action === 'force_update_blocklist') {
+    // 手动触发更新 blocklist
+    fetchRemoteBlocklistAndUpdate().then(result => {
+      sendResponse({ ok: result.ok, count: result.count, error: result.error });
+    }).catch(err => {
+      sendResponse({ ok: false, error: err && err.message });
+    });
+    return true; // 异步
   }
 });
 
@@ -839,12 +880,152 @@ function handleSuspiciousURL(url, tabId) {
   // 这里暂时只记录日志，可以根据需要扩展功能
 }
 
-// 拦截网络请求，阻止追踪器
-// 注意：Manifest V3中webRequest的blocking模式需要企业策略权限
-// 普通扩展无法使用，已移除。追踪器阻止功能由content-scripts/tracker-blocker.js处理
-// 如果需要更强大的阻止功能，可以使用declarativeNetRequest API
+// 使用 Declarative Net Request (DNR) 动态规则来阻止已知追踪器域名
+// 说明:
+// - Manifest V3 推荐使用 DNR 而不是 webRequest blocking。
+// - 我们把规则ID分配在1000起的范围内，便于后续更新/删除。
 
-// 判断是否是追踪器
+const TRACKER_RULE_BASE_ID = 1000;
+const TRACKER_RULE_MAX_COUNT = 1000; // 支持最多1000条动态规则
+
+// 自动更新 blocklist 配置
+const BLOCKLIST_SOURCES = [
+  // 优先尝试从 Disconnect 的 services.json 拉取（人类可读的追踪器数据）
+  'https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json',
+  // 备用：EasyList（纯文本，解析会做宽松匹配）
+  'https://raw.githubusercontent.com/easylist/easylist/master/easylist/easylist_general_block.txt'
+];
+const BLOCKLIST_AUTO_UPDATE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24小时
+let blocklistAutoUpdateTimer = null;
+// 当远程列表超出 DNR 能下发的数量时，fallback 中保存的最大条目数（仅保留前 M）
+const FALLBACK_SAVE_LIMIT = 5000;
+function buildDNRRulesFromDomains(domains) {
+  const rules = [];
+  for (let i = 0; i < domains.length && i < TRACKER_RULE_MAX_COUNT; i++) {
+    const id = TRACKER_RULE_BASE_ID + i;
+    const domain = domains[i];
+    rules.push({
+      id: id,
+      priority: 1,
+      action: { type: 'block' },
+      condition: {
+        requestDomains: [domain],
+        // 阻止常见的可用于追踪的资源类型
+        resourceTypes: ['script', 'image', 'stylesheet', 'sub_frame', 'xmlhttprequest', 'object', 'other', 'media', 'font', 'ping']
+      }
+    });
+  }
+  return rules;
+}
+
+function getTrackerRuleIdsRange() {
+  const ids = [];
+  for (let i = 0; i < TRACKER_RULE_MAX_COUNT; i++) {
+    ids.push(TRACKER_RULE_BASE_ID + i);
+  }
+  return ids;
+}
+
+function updateTrackerDNRRules(domains) {
+  try {
+    const addRules = buildDNRRulesFromDomains(domains);
+    const removeRuleIds = getTrackerRuleIdsRange();
+
+    chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('更新 DNR 规则失败:', chrome.runtime.lastError);
+      } else {
+        console.log(`已应用 ${addRules.length} 条追踪器阻止规则`);
+      }
+    });
+  } catch (e) {
+    console.error('更新追踪器 DNR 规则时出错:', e);
+  }
+}
+
+// 从远程源拉取并更新 blocklist（宽松解析，优先取域名样式字符串）
+async function fetchRemoteBlocklistAndUpdate() {
+  try {
+    console.log('开始拉取远程 blocklist...');
+    const fetched = new Set(TRACKER_DOMAINS.map(d => d.toLowerCase()));
+
+    for (const src of BLOCKLIST_SOURCES) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const resp = await fetch(src, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!resp.ok) {
+          console.warn('拉取 blocklist 源失败:', src, resp.status);
+          continue;
+        }
+
+        const text = await resp.text();
+        // 提取看起来像域名的 token（宽松）
+        const domainPattern = /([a-z0-9][a-z0-9\-\.]{1,}\.[a-z]{2,})/gi;
+        let m;
+        while ((m = domainPattern.exec(text)) !== null) {
+          const d = (m[1] || '').toLowerCase();
+          // 基本过滤：不要包含斜杠或协议
+          if (!d || d.indexOf('/') !== -1 || d.indexOf(':') !== -1) continue;
+          // 排除非常短的 TLD-like mistakes
+          if (d.split('.').length < 2) continue;
+          fetched.add(d);
+        }
+      } catch (e) {
+        console.warn('处理 blocklist 源时出错:', src, e && e.message);
+        continue;
+      }
+    }
+
+    // 转为数组并去重
+    const allDomains = Array.from(fetched.values());
+    // 将内置 TRACKER_DOMAINS 放在前面以保证优先下发
+    const builtin = TRACKER_DOMAINS.map(d => d.toLowerCase());
+    const prioritized = [];
+    for (const d of builtin) {
+      if (allDomains.includes(d)) prioritized.push(d);
+    }
+    const rest = allDomains.filter(d => !prioritized.includes(d));
+
+    // 计算要下发到 DNR 的域名（最多 TRACKER_RULE_MAX_COUNT）
+    const finalDNR = prioritized.concat(rest).slice(0, TRACKER_RULE_MAX_COUNT);
+
+    // 余下的域名作为 fallback 保存，但限制为 FALLBACK_SAVE_LIMIT
+    const restAfterDNR = (prioritized.concat(rest)).slice(TRACKER_RULE_MAX_COUNT);
+    const fallback = restAfterDNR.slice(0, FALLBACK_SAVE_LIMIT);
+
+    // 应用 DNR 规则并保存到 storage（记录更新时间及 fallback）
+    updateTrackerDNRRules(finalDNR);
+    const now = Date.now();
+    chrome.storage.local.set({ blocklist_last_update: now, blocklist_size: finalDNR.length, fallback_blocklist: fallback });
+    console.log('blocklist 更新完成，DNR 域名数量:', finalDNR.length, 'fallback 保存数量:', fallback.length);
+    return { ok: true, dnrCount: finalDNR.length, fallbackCount: fallback.length };
+  } catch (e) {
+    console.error('fetchRemoteBlocklistAndUpdate 错误:', e);
+    return { ok: false, error: e && e.message };
+  }
+}
+
+function scheduleBlocklistAutoUpdate() {
+  // 清除旧 timer
+  if (blocklistAutoUpdateTimer) {
+    clearInterval(blocklistAutoUpdateTimer);
+    blocklistAutoUpdateTimer = null;
+  }
+  try {
+    // 立即触发一次
+    fetchRemoteBlocklistAndUpdate().catch(() => {});
+    blocklistAutoUpdateTimer = setInterval(() => {
+      fetchRemoteBlocklistAndUpdate().catch(() => {});
+    }, BLOCKLIST_AUTO_UPDATE_INTERVAL_MS);
+    console.log('已调度 blocklist 自动更新，间隔 ms=', BLOCKLIST_AUTO_UPDATE_INTERVAL_MS);
+  } catch (e) {
+    console.warn('scheduleBlocklistAutoUpdate 失败:', e);
+  }
+}
+
+// 简单判断是否命中追踪器域名（用于非网络级别的逻辑，如 cookie 移除）
 function isTracker(url) {
   try {
     const hostname = new URL(url).hostname;
@@ -852,6 +1033,29 @@ function isTracker(url) {
   } catch (e) {
     return false;
   }
+}
+
+// 在扩展启动/安装时应用初始规则
+chrome.runtime.onInstalled.addListener(() => {
+  try {
+    updateTrackerDNRRules(TRACKER_DOMAINS);
+  } catch (e) {
+    console.warn('onInstalled 应用 DNR 规则失败:', e);
+  }
+});
+
+// 在 service worker 启动时也尝试应用（确保重启后规则存在）
+try {
+  updateTrackerDNRRules(TRACKER_DOMAINS);
+} catch (e) {
+  // 忽略启动时错误
+}
+
+// 启动自动更新调度（仅在 service worker 启动时调用一次）
+try {
+  scheduleBlocklistAutoUpdate();
+} catch (e) {
+  console.warn('启动 blocklist 自动更新失败:', e);
 }
 
 // 监听Cookie设置，阻止第三方Cookie
